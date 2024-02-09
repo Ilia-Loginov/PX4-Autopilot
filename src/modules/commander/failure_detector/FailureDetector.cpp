@@ -58,6 +58,7 @@ void FailureInjector::update()
 		const int failure_type = static_cast<int>(vehicle_command.param2 + 0.5f);
 		const int instance = static_cast<int>(vehicle_command.param3 + 0.5f);
 
+		PX4_INFO("Failure detector caught new injection");
 		if (failure_unit == vehicle_command_s::FAILURE_UNIT_SYSTEM_MOTOR) {
 			handled = true;
 
@@ -116,6 +117,19 @@ void FailureInjector::update()
 					PX4_INFO("CMD_INJECT_FAILURE, motor %d wrong", instance - 1);
 					_esc_wrong |= 1 << (instance - 1);
 				}
+			}
+		}
+		else if (failure_unit == vehicle_command_s::FAILURE_UNIT_SENSOR_GPS)
+		{
+			handled = true;
+			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
+				PX4_INFO("CMD_INJECT_FAILURE, gps ok");
+				supported = true;
+			}
+
+			else if (failure_type == vehicle_command_s::FAILURE_TYPE_OFF) {
+				PX4_WARN("CMD_INJECT_FAILURE, gps off");
+				supported = true;
 			}
 		}
 
