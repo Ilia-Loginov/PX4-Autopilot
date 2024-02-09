@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+import shutil
 from logger_helper import color, colorize
 import process_helper as ph
 from typing import Any, Dict, List, NoReturn, TextIO, Optional
@@ -55,6 +56,8 @@ def main() -> NoReturn:
     parser.add_argument("--build-dir", type=str,
                         default='build/px4_sitl_default/',
                         help="relative path where the built files are stored")
+    parser.add_argument("--hitl", default=False, action='store_true',
+                        help="using hitl for tests")
     args = parser.parse_args()
 
     with open(args.config_file) as json_file:
@@ -84,7 +87,8 @@ def main() -> NoReturn:
         args.gui,
         args.verbose,
         args.upload,
-        args.build_dir
+        args.build_dir,
+        args.hitl
     )
     signal.signal(signal.SIGINT, tester.sigint_handler)
 
@@ -146,7 +150,8 @@ class Tester:
                  gui: bool,
                  verbose: bool,
                  upload: bool,
-                 build_dir: str):
+                 build_dir: str,
+                 hitl: bool):
         self.config = config
         self.build_dir = build_dir
         self.active_runners: List[ph.Runner]
@@ -161,6 +166,7 @@ class Tester:
         self.upload = upload
         self.start_time = datetime.datetime.now()
         self.log_fd: Any[TextIO] = None
+        self.hitl = hitl
 
     @staticmethod
     def wildcard_match(pattern: str, potential_match: str) -> bool:
@@ -204,10 +210,118 @@ class Tester:
     def run(self) -> bool:
         self.show_plans()
         self.prepare_for_results()
+        #self.upload_framware()
         self.run_tests()
         self.show_detailed_results()
         self.show_overall_result()
         return self.was_overall_pass()
+
+    def upload_framware(self):
+        if self.hitl:
+            print("Start upload firmware")
+            script_path = '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/Tools/px_uploader.py'
+            script_arguments = ['--port', '/dev/ttyACM0', '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
+
+            all_script_arguments = [script_path, '--port', '/dev/ttyACM0', '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
+            command = ["python3"] + all_script_arguments
+
+            try:
+                subprocess.run(command, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error: {e}")
+
+    def send_command_to_px4(self, command):
+        shell = "./Tools/mavlink_shell.py /dev/ttyACM0"
+        prosces = subprocess.Popen(shell, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        prosces.stdin.write(command + '\n')
+        prosces.stdin.flush()
+
+        output, errors = prosces.communicate()
+
+        prosces.stdin.close()
+        prosces.stdout.close()
+        prosces.stderr.close()
+
+        if (len(errors)> 0):
+            print("Error sending command ", command, " by ", shell)
+            if(self.verbose):
+                print("=========================")
+                print("errors:", errors)
+                print("=========================")
+            return False
+
+        if ( len(output) < len("Connecting to MAVLINK...")):
+            print("Device doesn't answer")
+            return False
+
+        print("Command ", command, " was send by ", shell)
+        return True
+
+    def reboot_px4(self):
+        if (not self.check_dev()):
+            return
+
+        if (self.send_command_to_px4("reboot")):
+            time.sleep(5)
+
+    def check_dev(self):
+        device_path = "/dev/ttyACM0"
+        if os.path.exists(device_path):
+            print("Device ", device_path, " exists")
+            return True
+
+        print("Device ", device_path, " doesn't exist")
+        return False
+
+    def check_connection_px4(self):
+        if (not self.check_dev()):
+            return False
+
+        return self.send_command_to_px4("ver mcu")
+
+    def check_connection_px4_times(self, num_cases = 3):
+        while(num_cases > 0 and (not self.check_connection_px4())):
+            num_cases -= 1
+            time.sleep(0.5)
+
+        if (num_cases > 0):
+            return True
+
+        return False
+
+    def check_logs(self, path):
+        file_name = "/log-gzserver.log"
+        keyword = "overflow"
+        file_path = path+file_name
+        try:
+            with open(file_path, 'r') as file:
+                for line_number, line in enumerate(file, start=1):
+                    if keyword in line:
+                        return True
+        except FileNotFoundError:
+            print(f'File "{file_path}" not found.')
+        except Exception as e:
+            print(f'An error occurred: {e}')
+        return False
+
+    def delete_contents(self, folder_path):
+        try:
+
+            for filename in os.listdir(folder_path):
+                file_path = os.path.join(folder_path, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print(f'Error while deleting {file_path}: {e}')
+
+            print(f'All contents in {folder_path} have been deleted.')
+        except FileNotFoundError:
+            print(f'Folder "{folder_path}" not found.')
+        except Exception as e:
+            print(f'An error occurred: {e}')
 
     def show_plans(self) -> None:
         print()
@@ -303,6 +417,23 @@ class Tester:
                 os.makedirs(log_dir, exist_ok=True)
 
                 was_success = self.run_test_case(test, key, log_dir)
+                if (self.hitl and not was_success):
+                    count = 3
+                    while(count > 0):
+
+                        if (not self.check_logs(log_dir)):
+                            break
+
+                        print ("Restarting test because serial port has been overflowed")
+                        self.delete_contents(log_dir)
+                        test['cases'][key]['results'].clear()
+                        print ("Deleting of Logs of a previous run  of test")
+
+                        was_success = self.run_test_case(test, key, log_dir)
+                        if (was_success):
+                            break
+
+                        count -= 1
 
                 print("--- Test case {} of {}: '{}' {}."
                       .format(test_i+1,
@@ -402,6 +533,17 @@ class Tester:
 
         if self.config['mode'] == 'sitl':
             if self.config['simulator'] == 'gazebo':
+
+                #self.upload_framware()
+                #if self.hitl:
+                #    flasher_runner = ph.Px4Flasher(
+                #        os.getcwd(),
+                #        log_dir,
+                #        test['model'],
+                #        case,
+                #        self.verbose)
+                #    self.active_runners.append(flasher_runner)
+
                 gzserver_runner = ph.GzserverRunner(
                     os.getcwd(),
                     log_dir,
@@ -435,16 +577,17 @@ class Tester:
                 # out the PX4 (it needs to have data coming in when started),
                 # and can lead to EKF to freak out, or the instance itself
                 # to die unexpectedly.
-                px4_runner = ph.Px4Runner(
-                    os.getcwd(),
-                    log_dir,
-                    test['model'],
-                    case,
-                    self.get_max_speed_factor(test),
-                    self.debugger,
-                    self.verbose,
-                    self.build_dir)
-                self.active_runners.append(px4_runner)
+                if not self.hitl:
+                    px4_runner = ph.Px4Runner(
+                        os.getcwd(),
+                        log_dir,
+                        test['model'],
+                        case,
+                        self.get_max_speed_factor(test),
+                        self.debugger,
+                        self.verbose,
+                        self.build_dir)
+                    self.active_runners.append(px4_runner)
 
         mavsdk_tests_runner = ph.TestRunner(
             os.getcwd(),
@@ -456,6 +599,17 @@ class Tester:
             self.verbose,
             self.build_dir)
         self.active_runners.append(mavsdk_tests_runner)
+
+        if (self.hitl):
+            self.reboot_px4()
+            print("____Reboot was finished")
+
+            if (not self.check_connection_px4_times(3)):
+                print("Could not start runners. Lost connection")
+                self.collect_runner_output()
+                self.stop_combined_log()
+                self.stop_runners()
+                sys.exit(1)
 
         abort = False
         for runner in self.active_runners:

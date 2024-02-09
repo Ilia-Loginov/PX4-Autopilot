@@ -148,6 +148,20 @@ class Runner:
     def time_elapsed_s(self) -> float:
         return time.time() - self.start_time
 
+#I added this runner, but I suppose it is useless, because all runner start at the same time.
+#Or we can put its in another list of runners.
+class Px4Flasher(Runner):
+    def __init__(self, workspace_dir: str, log_dir: str,
+                 model: str, case: str, verbose: bool):
+        super().__init__(log_dir, model, case, verbose)
+        print("init flasher")
+        print("Start upload firmware")
+        script_path = 'Tools/px_uploader.py'
+        arguments = [script_path, '--port', '/dev/ttyACM0', 'build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
+        self.name = "flasher"
+        self.cwd = workspace_dir
+        self.cmd = "python3"
+        self.args = arguments
 
 class Px4Runner(Runner):
     def __init__(self, workspace_dir: str, log_dir: str,
