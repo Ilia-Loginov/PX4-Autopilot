@@ -219,10 +219,10 @@ class Tester:
     def upload_framware(self):
         if self.hitl:
             print("Start upload firmware")
-            script_path = '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/Tools/px_uploader.py'
-            script_arguments = ['--port', '/dev/ttyACM0', '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
+            script_path = './Tools/px_uploader.py'
+            script_arguments = ['--port', '/dev/ttyACM0', './build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
 
-            all_script_arguments = [script_path, '--port', '/dev/ttyACM0', '/home/ilia/Documents/github/px4_set/main/PX4-Autopilot/build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
+            all_script_arguments = [script_path, '--port', '/dev/ttyACM0', './build/px4_fmu-v6x_default/px4_fmu-v6x_default.px4']
             command = ["python3"] + all_script_arguments
 
             try:

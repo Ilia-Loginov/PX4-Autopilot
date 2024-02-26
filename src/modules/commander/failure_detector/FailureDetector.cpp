@@ -119,19 +119,6 @@ void FailureInjector::update()
 				}
 			}
 		}
-		else if (failure_unit == vehicle_command_s::FAILURE_UNIT_SENSOR_GPS)
-		{
-			handled = true;
-			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
-				PX4_INFO("CMD_INJECT_FAILURE, gps ok");
-				supported = true;
-			}
-
-			else if (failure_type == vehicle_command_s::FAILURE_TYPE_OFF) {
-				PX4_WARN("CMD_INJECT_FAILURE, gps off");
-				supported = true;
-			}
-		}
 
 		if (handled) {
 			vehicle_command_ack_s ack{};

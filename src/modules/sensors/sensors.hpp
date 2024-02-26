@@ -90,6 +90,31 @@
 
 using namespace sensors;
 using namespace time_literals;
+
+#include <uORB/topics/vehicle_command.h>
+#include <uORB/topics/vehicle_command_ack.h>
+
+
+class FailureInjectorHITL final
+{
+public:
+	FailureInjectorHITL(bool hil_enabled);
+	bool update();
+
+	bool isGpsBlocked() const;
+	bool isBaroBlocked() const;
+	bool isMagBlocked() const;
+
+private:
+	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
+	uORB::Publication<vehicle_command_ack_s> _command_ack_pub{ORB_ID(vehicle_command_ack)};
+
+	bool _gps_blocked{};
+	bool _baro_blocked{};
+	bool _mag_blocked{};
+};
+
+
 /**
  * HACK - true temperature is much less than indicated temperature in baro,
  * subtract 5 degrees in an attempt to account for the electrical upheating of the PCB
@@ -250,6 +275,8 @@ private:
 	VehicleOpticalFlow *_vehicle_optical_flow {nullptr};
 	uint8_t _n_optical_flow{0};
 #endif // CONFIG_SENSORS_VEHICLE_OPTICAL_FLOW
+
+	FailureInjectorHITL _failureInjector;
 
 	DEFINE_PARAMETERS(
 #if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)
