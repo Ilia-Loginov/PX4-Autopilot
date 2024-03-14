@@ -5,8 +5,8 @@
     "tests":
     [
         {
-            "model": "iris_hitl",
-            "vehicle": "iris_hitl",
+            "model": "iris_hitl_eth",
+            "vehicle": "iris_hitl_eth",
             "test_filter": "[multicopter],[offboard][offboard_attitude]",
             "timeout_min": 10
         }
