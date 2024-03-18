@@ -6,6 +6,72 @@
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_command_ack.h>
 
+#include <px4_platform_common/module_params.h>
+#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
+#include <uORB/topics/sensor_gps.h>
+#include <uORB/topics/vehicle_air_data.h>
+
+using namespace time_literals;
+
+namespace sensors
+{
+
+template <typename sensorsData>
+class FakeStuckSensors : public ModuleParams, public px4::ScheduledWorkItem
+{
+public:
+	FakeStuckSensors(ORB_ID id):
+		ModuleParams(nullptr),
+		ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::nav_and_controllers),
+		_sensor_pub(id),
+		_sensor_sub(id) {
+		_sensor_pub.advertise();
+	}
+
+	~FakeStuckSensors() override {
+		Stop();
+		perf_free(_cycle_perf);
+	}
+
+	bool Start() {
+		ScheduleNow();
+		return true;
+	}
+
+	void Stop() {
+		Deinit();
+	}
+
+	void SetUsing(bool use) {
+		_use = use;
+	}
+private:
+	void Run() override {
+		perf_begin(_cycle_perf);
+
+		while (_sensor_sub.update(&_last_output)){
+			updated_= true;
+		}
+
+		if (_use && updated_) {
+			_sensor_pub.publish(_last_output);
+		}
+
+		ScheduleDelayed(300_ms); // backup schedule
+
+		perf_end(_cycle_perf);
+	}
+
+	uORB::Publication<sensorsData> _sensor_pub{};
+	uORB::Subscription _sensor_sub{};
+
+	bool _use{};
+	bool updated_{};
+	sensorsData _last_output{};
+	perf_counter_t _cycle_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
+};
+
+}
 
 /**
  * @brief
@@ -28,16 +94,25 @@ class FailureDetectorHITL final
 public:
 	FailureDetectorHITL(bool hil_enabled);
 	bool update();
+	void updateFakeSensors();
 
 	bool isGpsBlocked() const;
 	bool isBaroBlocked() const;
 	bool isMagBlocked() const;
 
 private:
+	enum class FailureStatus {
+		OK,
+		OFF,
+		STUCK
+	};
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
 	uORB::Publication<vehicle_command_ack_s> _command_ack_pub{ORB_ID(vehicle_command_ack)};
 
-	bool _gps_blocked{};
-	bool _baro_blocked{};
-	bool _mag_blocked{};
+	FailureStatus _gps{FailureStatus::OK};
+	FailureStatus _baro{FailureStatus::OK};
+	FailureStatus _mag{FailureStatus::OK};
+
+	sensors::FakeStuckSensors<vehicle_air_data_s> _fake_baro_publisher{ORB_ID::vehicle_air_data};
+	sensors::FakeStuckSensors<sensor_gps_s> _fake_gps_publisher{ORB_ID::vehicle_gps_position};
 };

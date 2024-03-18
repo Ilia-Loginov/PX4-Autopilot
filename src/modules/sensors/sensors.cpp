@@ -173,6 +173,8 @@ int Sensors::parameters_update()
 		#if defined(CONFIG_SENSORS_VEHICLE_MAGNETOMETER)
 			InitializeVehicleMagnetometer();
 		#endif // CONFIG_SENSORS_VEHICLE_MAGNETOMETER
+
+		_failureDetector.updateFakeSensors();
 	}
 
 	if (_armed) {
