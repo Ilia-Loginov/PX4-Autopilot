@@ -17,7 +17,7 @@ namespace sensors
 {
 
 template <typename sensorsData>
-class FakeStuckSensors : public ModuleParams, public px4::ScheduledWorkItem
+class FakeStuckSensors final: public ModuleParams, public px4::ScheduledWorkItem
 {
 public:
 	FakeStuckSensors(ORB_ID id):
@@ -49,11 +49,11 @@ private:
 	void Run() override {
 		perf_begin(_cycle_perf);
 
-		while (_sensor_sub.update(&_last_output)){
-			updated_= true;
+		while (_sensor_sub.update(&_first_init)){
+			_first_init= true;
 		}
 
-		if (_use && updated_) {
+		if (_use && _first_init) {
 			_sensor_pub.publish(_last_output);
 		}
 
@@ -66,7 +66,7 @@ private:
 	uORB::Subscription _sensor_sub{};
 
 	bool _use{};
-	bool updated_{};
+	bool _first_init{};
 	sensorsData _last_output{};
 	perf_counter_t _cycle_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 };
@@ -88,6 +88,7 @@ private:
  * Supported commands:
  * \ref FAILURE_TYPE_OK
  * \ref FAILURE_TYPE_FAIL
+ * \ref FAILURE_TYPE_STUCK(only \ref FAILURE_UNIT_SENSOR_GPS and \ref FAILURE_UNIT_SENSOR_BARO)
  */
 class FailureDetectorHITL final
 {
@@ -102,16 +103,16 @@ public:
 
 private:
 	enum class FailureStatus {
-		OK,
-		OFF,
-		STUCK
+		ok,
+		off,
+		stuck
 	};
 	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
 	uORB::Publication<vehicle_command_ack_s> _command_ack_pub{ORB_ID(vehicle_command_ack)};
 
-	FailureStatus _gps{FailureStatus::OK};
-	FailureStatus _baro{FailureStatus::OK};
-	FailureStatus _mag{FailureStatus::OK};
+	FailureStatus _gps{FailureStatus::ok};
+	FailureStatus _baro{FailureStatus::ok};
+	FailureStatus _mag{FailureStatus::ok};
 
 	sensors::FakeStuckSensors<vehicle_air_data_s> _fake_baro_publisher{ORB_ID::vehicle_air_data};
 	sensors::FakeStuckSensors<sensor_gps_s> _fake_gps_publisher{ORB_ID::vehicle_gps_position};

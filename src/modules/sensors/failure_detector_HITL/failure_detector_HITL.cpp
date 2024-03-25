@@ -14,10 +14,6 @@ FailureDetectorHITL::FailureDetectorHITL(bool hil_enabled) {
 	}
 }
 bool FailureDetectorHITL::update() {
-
-	//sensors::FakeStuckSensors<sensor_gps_s> _fake_gps_publisher(ORB_ID(vehicle_gps_position));
-	//sensors::FakeStuckSensors<sensor_gps_s> _fake_gps_publisher(ORB_ID::vehicle_gps_position);
-
 	vehicle_command_s vehicle_command;
 	bool update = false;
 
@@ -37,18 +33,18 @@ bool FailureDetectorHITL::update() {
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, gps ok");
-				_gps = FailureStatus::OK;
+				_gps = FailureStatus::ok;
 				supported = true;
 
 			}
 			else if (failure_type == vehicle_command_s::FAILURE_TYPE_OFF) {
 				PX4_WARN("CMD_INJECT_FAILURE, gps off");
 				supported = true;
-				_gps = FailureStatus::OFF;
+				_gps = FailureStatus::off;
 			}
 			else if (failure_type == vehicle_command_s::FAILURE_TYPE_STUCK) {
 				PX4_WARN("CMD_INJECT_FAILURE, gps stuck");
-				_gps = FailureStatus::STUCK;
+				_gps = FailureStatus::stuck;
 				supported = true;
 			}
 		}
@@ -56,17 +52,17 @@ bool FailureDetectorHITL::update() {
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, baro ok");
-				_baro = FailureStatus::OK;
+				_baro = FailureStatus::ok;
 				supported = true;
 			}
 			else if (failure_type == vehicle_command_s::FAILURE_TYPE_OFF) {
 				PX4_WARN("CMD_INJECT_FAILURE, baro off");
-				_baro = FailureStatus::OFF;
+				_baro = FailureStatus::off;
 				supported = true;
 			}
 			else if (failure_type == vehicle_command_s::FAILURE_TYPE_STUCK) {
 				PX4_WARN("CMD_INJECT_FAILURE, baro stuck");
-				_baro = FailureStatus::STUCK;
+				_baro = FailureStatus::stuck;
 				supported = true;
 			}
 		}
@@ -74,12 +70,12 @@ bool FailureDetectorHITL::update() {
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, mag ok");
-				_mag = FailureStatus::OK;
+				_mag = FailureStatus::ok;
 				supported = true;
 			}
 			else if (failure_type == vehicle_command_s::FAILURE_TYPE_OFF) {
 				PX4_WARN("CMD_INJECT_FAILURE, mag off");
-				_mag = FailureStatus::OFF;
+				_mag = FailureStatus::off;
 				supported = true;
 			}
 		}
@@ -100,18 +96,18 @@ bool FailureDetectorHITL::update() {
 }
 
 bool FailureDetectorHITL::isGpsBlocked() const {
-	return FailureStatus::OFF == _gps || FailureStatus::STUCK == _gps;
+	return FailureStatus::off == _gps || FailureStatus::stuck == _gps;
 }
 
 bool FailureDetectorHITL::isBaroBlocked() const {
-	return FailureStatus::OFF == _baro || FailureStatus::STUCK == _baro;
+	return FailureStatus::off == _baro || FailureStatus::stuck == _baro;
 }
 
 bool FailureDetectorHITL::isMagBlocked() const {
-	return FailureStatus::OFF == _mag || FailureStatus::STUCK == _mag;
+	return FailureStatus::off == _mag || FailureStatus::stuck == _mag;
 }
 
 void FailureDetectorHITL::updateFakeSensors() {
-	_fake_gps_publisher.SetUsing(_gps == FailureStatus::STUCK);
-	_fake_baro_publisher.SetUsing(_baro == FailureStatus::STUCK);
+	_fake_gps_publisher.SetUsing(_gps == FailureStatus::stuck);
+	_fake_baro_publisher.SetUsing(_baro == FailureStatus::stuck);
 }
