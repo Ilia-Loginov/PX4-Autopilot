@@ -255,6 +255,7 @@ private:
 #endif // CONFIG_SENSORS_VEHICLE_OPTICAL_FLOW
 
 	FailureDetectorHITL _failureDetector;
+	FakeSensors _fakeSensors;
 
 	DEFINE_PARAMETERS(
 #if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)

@@ -49,7 +49,8 @@ Sensors::Sensors(bool hil_enabled) :
 	_hil_enabled(hil_enabled),
 	_loop_perf(perf_alloc(PC_ELAPSED, "sensors")),
 	_voted_sensors_update(hil_enabled, _vehicle_imu_sub),
-	_failureDetector(hil_enabled)
+	_failureDetector(hil_enabled),
+	_fakeSensors(hil_enabled)
 {
 	_sensor_pub.advertise();
 
@@ -174,7 +175,7 @@ int Sensors::parameters_update()
 			InitializeVehicleMagnetometer();
 		#endif // CONFIG_SENSORS_VEHICLE_MAGNETOMETER
 
-		_failureDetector.updateFakeSensors();
+		_fakeSensors.update(_failureDetector);
 	}
 
 	if (_armed) {

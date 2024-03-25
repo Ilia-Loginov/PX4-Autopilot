@@ -2,19 +2,39 @@
 
 #include <px4_platform_common/log.h>
 
+FakeSensors::FakeSensors(bool hil_enabled) {
+	if (hil_enabled) {
+#if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)
+		_fake_baro_publisher.start();
+#endif // CONFIG_SENSORS_VEHICLE_AIR_DATA
+
+#if defined(CONFIG_SENSORS_VEHICLE_GPS_POSITION)
+		_fake_gps_publisher.start();
+#endif // CONFIG_SENSORS_VEHICLE_GPS_POSITION
+	}
+}
+
+void FakeSensors::update(const FailureDetectorHITL& detector) {
+#if defined(CONFIG_SENSORS_VEHICLE_GPS_POSITION)
+	_fake_gps_publisher.setEnabled(detector.isGpsStuck());
+#endif // CONFIG_SENSORS_VEHICLE_GPS_POSITION
+
+#if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)
+	_fake_baro_publisher.setEnabled(detector.isBaroStuck());
+#endif // CONFIG_SENSORS_VEHICLE_AIR_DATA
+}
 
 FailureDetectorHITL::FailureDetectorHITL(bool hil_enabled) {
 
-	PX4_WARN("RUN FailureDetectorHITL %d", hil_enabled);
-	if(!hil_enabled)
+	if(!hil_enabled) {
 		_vehicle_command_sub.unsubscribe();
+	}
 	else {
-		_fake_baro_publisher.Start();
-		_fake_gps_publisher.Start();
+		PX4_INFO("RUN FailureDetectorHITL");
 	}
 }
 bool FailureDetectorHITL::update() {
-	vehicle_command_s vehicle_command;
+	vehicle_command_s vehicle_command{};
 	bool update = false;
 
 	while (_vehicle_command_sub.update(&vehicle_command)) {
@@ -28,8 +48,11 @@ bool FailureDetectorHITL::update() {
 		const int failure_unit = static_cast<int>(vehicle_command.param1 + 0.5f);
 		const int failure_type = static_cast<int>(vehicle_command.param2 + 0.5f);
 
-		PX4_INFO("Sensor failure detector caught new injection");
-		if (failure_unit == vehicle_command_s::FAILURE_UNIT_SENSOR_GPS) {
+		PX4_INFO("Failure detector caught new injection");
+		switch (failure_unit)
+		{
+		case vehicle_command_s::FAILURE_UNIT_SENSOR_GPS:
+#if defined(CONFIG_SENSORS_VEHICLE_GPS_POSITION)
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, gps ok");
@@ -47,8 +70,11 @@ bool FailureDetectorHITL::update() {
 				_gps = FailureStatus::stuck;
 				supported = true;
 			}
-		}
-		else if (failure_unit == vehicle_command_s::FAILURE_UNIT_SENSOR_BARO) {
+#endif // CONFIG_SENSORS_VEHICLE_GPS_POSITION
+			break;
+
+		case vehicle_command_s::FAILURE_UNIT_SENSOR_BARO:
+#if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, baro ok");
@@ -65,8 +91,11 @@ bool FailureDetectorHITL::update() {
 				_baro = FailureStatus::stuck;
 				supported = true;
 			}
-		}
-		else if (failure_unit == vehicle_command_s::FAILURE_UNIT_SENSOR_MAG) {
+#endif // CONFIG_SENSORS_VEHICLE_AIR_DATA
+			break;
+
+		case vehicle_command_s::FAILURE_UNIT_SENSOR_MAG:
+#if defined(CONFIG_SENSORS_VEHICLE_MAGNETOMETER)
 			handled = true;
 			if (failure_type == vehicle_command_s::FAILURE_TYPE_OK) {
 				PX4_INFO("CMD_INJECT_FAILURE, mag ok");
@@ -78,6 +107,10 @@ bool FailureDetectorHITL::update() {
 				_mag = FailureStatus::off;
 				supported = true;
 			}
+#endif // CONFIG_SENSORS_VEHICLE_MAGNETOMETER
+			break;
+		default:
+			break;
 		}
 
 		if (handled) {
@@ -94,20 +127,28 @@ bool FailureDetectorHITL::update() {
 	}
 	return update;
 }
-
+#if defined(CONFIG_SENSORS_VEHICLE_GPS_POSITION)
 bool FailureDetectorHITL::isGpsBlocked() const {
-	return FailureStatus::off == _gps || FailureStatus::stuck == _gps;
+	return FailureStatus::ok != _gps;
 }
 
+bool FailureDetectorHITL::isGpsStuck() const {
+	return FailureStatus::stuck == _gps;
+}
+#endif // CONFIG_SENSORS_VEHICLE_GPS_POSITION
+
+#if defined(CONFIG_SENSORS_VEHICLE_AIR_DATA)
 bool FailureDetectorHITL::isBaroBlocked() const {
-	return FailureStatus::off == _baro || FailureStatus::stuck == _baro;
+	return FailureStatus::ok != _baro;
 }
 
+bool FailureDetectorHITL::isBaroStuck() const {
+	return FailureStatus::stuck == _baro;
+}
+#endif // CONFIG_SENSORS_VEHICLE_AIR_DATA
+
+#if defined(CONFIG_SENSORS_VEHICLE_MAGNETOMETER)
 bool FailureDetectorHITL::isMagBlocked() const {
-	return FailureStatus::off == _mag || FailureStatus::stuck == _mag;
+	return FailureStatus::ok != _mag;
 }
-
-void FailureDetectorHITL::updateFakeSensors() {
-	_fake_gps_publisher.SetUsing(_gps == FailureStatus::stuck);
-	_fake_baro_publisher.SetUsing(_baro == FailureStatus::stuck);
-}
+#endif // CONFIG_SENSORS_VEHICLE_MAGNETOMETER
