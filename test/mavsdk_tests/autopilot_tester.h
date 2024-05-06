@@ -140,6 +140,7 @@ public:
 	void start_checking_altitude(const float max_deviation_m);
 	void stop_checking_altitude();
 	void check_current_altitude(float target_rel_altitude_m, float max_distance_m = 1.5f);
+	void reboot(const std::string uri = "");
 
 	// Blocking call to get the drone's current position in NED frame
 	std::array<float, 3> get_current_position_ned();

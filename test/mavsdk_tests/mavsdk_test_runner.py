@@ -58,6 +58,8 @@ def main() -> NoReturn:
                         help="relative path where the built files are stored")
     parser.add_argument("--hitl", default=False, action='store_true',
                         help="using hitl for tests")
+    parser.add_argument("--connection", type=str, default="serial",
+                        help="the type of connection: serial or ethernet. Using only for --hitl")
     args = parser.parse_args()
 
     with open(args.config_file) as json_file:
@@ -88,7 +90,8 @@ def main() -> NoReturn:
         args.verbose,
         args.upload,
         args.build_dir,
-        args.hitl
+        args.hitl,
+        args.connection
     )
     signal.signal(signal.SIGINT, tester.sigint_handler)
 
@@ -151,7 +154,8 @@ class Tester:
                  verbose: bool,
                  upload: bool,
                  build_dir: str,
-                 hitl: bool):
+                 hitl: bool,
+                 connection: str):
         self.config = config
         self.build_dir = build_dir
         self.active_runners: List[ph.Runner]
@@ -167,6 +171,7 @@ class Tester:
         self.start_time = datetime.datetime.now()
         self.log_fd: Any[TextIO] = None
         self.hitl = hitl
+        self.connection = connection
 
     @staticmethod
     def wildcard_match(pattern: str, potential_match: str) -> bool:
@@ -230,6 +235,43 @@ class Tester:
             except subprocess.CalledProcessError as e:
                 print(f"Error: {e}")
 
+    def reboot_using_serial(self):
+        if (not self.check_dev()):
+            return False
+
+        if (self.send_command_to_px4("reboot")):
+            return True
+
+        return False
+
+    def reboot_using_ethernen(self):
+        return self.send_command_to_px4_def("./build/px4_sitl_default/mavsdk_tests/mavsdk_preparing", ["--url",  self.config['mavlink_connection']]) #"--url udp://192.168.0.3:14550")
+
+    def send_command_to_px4_def(self, path, args):
+        prosces = subprocess.Popen([path] + args,  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        prosces.stdin.flush()
+
+        output, errors = prosces.communicate()
+
+        prosces.stdin.close()
+        prosces.stdout.close()
+        prosces.stderr.close()
+
+        if (len(errors)> 0):
+            print("Error run command ", path, " with args ", args)
+            if(self.verbose):
+                print("=========================")
+                print("errors:", errors)
+                print("=========================")
+            return False
+
+        if ( len(output) < len("Connecting to MAVLINK...")):
+            print("Device doesn't answer")
+            return False
+
+        print("Command ", path, " was run with args ", args)
+        return True
+
     def send_command_to_px4(self, command):
         shell = "./Tools/mavlink_shell.py /dev/ttyACM0"
         prosces = subprocess.Popen(shell, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -258,11 +300,21 @@ class Tester:
         return True
 
     def reboot_px4(self):
-        if (not self.check_dev()):
-            return
 
-        if (self.send_command_to_px4("reboot")):
-            time.sleep(5)
+        res = False
+        if (self.connection == "serial"):
+            res = self.reboot_using_serial()
+        elif (self.connection == "ethernet"):
+            res = self.reboot_using_ethernen()
+        else:
+            print("Chose incorrect connection")
+
+        if (res):
+            print("Device was rebooted successfully")
+        else:
+            print("Rebooting failed")
+
+        time.sleep(10)
 
     def check_dev(self):
         device_path = "/dev/ttyACM0"
@@ -603,13 +655,13 @@ class Tester:
         if (self.hitl):
             self.reboot_px4()
             print("____Reboot was finished")
-
-            if (not self.check_connection_px4_times(3)):
-                print("Could not start runners. Lost connection")
-                self.collect_runner_output()
-                self.stop_combined_log()
-                self.stop_runners()
-                sys.exit(1)
+            if (self.connection == "serival"):
+                if (not self.check_connection_px4_times(3)):
+                    print("Could not start runners. Lost connection")
+                    self.collect_runner_output()
+                    self.stop_combined_log()
+                    self.stop_runners()
+                    sys.exit(1)
 
         abort = False
         for runner in self.active_runners:

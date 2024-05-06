@@ -30,10 +30,19 @@ if(MAVSDK_FOUND)
         # test_multicopter_follow_me.cpp
     )
 
+    add_executable(mavsdk_preparing
+        reboot.cpp
+    )
+
     target_link_libraries(mavsdk_tests
         MAVSDK::mavsdk
         ${CMAKE_THREAD_LIBS_INIT}
     )
+
+    target_link_libraries(mavsdk_preparing
+    MAVSDK::mavsdk
+    ${CMAKE_THREAD_LIBS_INIT}
+)
 
     target_compile_options(mavsdk_tests
         PRIVATE
