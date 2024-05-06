@@ -51,6 +51,7 @@
 #include <uORB/SubscriptionCallback.hpp>
 #include "voted_sensors_update.h"
 #include "vehicle_imu/VehicleIMU.hpp"
+#include "failure_detector_HITL/failure_detector_HITL.hpp"
 
 #if defined(CONFIG_SENSORS_VEHICLE_ACCELERATION)
 # include "vehicle_acceleration/VehicleAcceleration.hpp"
@@ -88,11 +89,8 @@
 # include "vehicle_optical_flow/VehicleOpticalFlow.hpp"
 #endif // CONFIG_SENSORS_VEHICLE_OPTICAL_FLOW
 
-# include "failure_detector_HITL/failure_detector_HITL.hpp"
-
 using namespace sensors;
 using namespace time_literals;
-
 /**
  * HACK - true temperature is much less than indicated temperature in baro,
  * subtract 5 degrees in an attempt to account for the electrical upheating of the PCB
@@ -136,6 +134,8 @@ private:
 	void		InitializeVehicleOpticalFlow();
 
 	const bool _hil_enabled;	/**< if true, HIL is active */
+
+	bool _failure_detector_updated{};	/**< true if the failure detector has been updated */
 
 	perf_counter_t	_loop_perf;	/**< loop performance counter */
 
