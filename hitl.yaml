@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  hitl:
+    image: gazebo11_22_04
+    network_mode: host
+    command: tail -f /dev/null
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - $PWD:/home/ilia/workspace
+    #ports:
+    #  - 192.168.0.50:14561:14561/udp
+    devices:
+      - '/dev/ttyACM0:/dev/ttyACM0'
+
+#docker run -ti --rm --network host -p 192.168.0.50:14561:14561/udp -p 192.168.0.50:14560:14560/udp -v "$PWD":/home/ilia/git --device=/dev/ttyACM0 --env=DISPLAY --name docker11_for_development gazebo11_22_04
