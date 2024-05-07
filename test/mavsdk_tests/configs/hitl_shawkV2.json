@@ -1,13 +1,12 @@
 {
     "mode": "sitl",
     "simulator": "gazebo",
-    "mavlink_connection": "udp://:14550",
-    "mavlink_connection_last_way_connection": "udp://192.168.0.3:14550",
+    "mavlink_connection": "udp://:14542",
     "tests":
     [
         {
-            "model": "iris_hitl_eth",
-            "vehicle": "iris_hitl_eth",
+            "model": "iris_hitl_shawkV2",
+            "vehicle": "iris_hitl_shawkV2",
             "test_filter": "[multicopter],[offboard][offboard_attitude]",
             "timeout_min": 10
         }

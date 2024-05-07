@@ -245,7 +245,7 @@ class Tester:
         return False
 
     def reboot_using_ethernen(self):
-        return self.send_command_to_px4_def("./build/px4_sitl_default/mavsdk_tests/mavsdk_preparing", ["--url",  self.config['mavlink_connection']]) #"--url udp://192.168.0.3:14550")
+        return self.send_command_to_px4_def("./build/px4_sitl_default/mavsdk_tests/mavsdk_preparing", ["--url",  self.config['mavlink_connection']])
 
     def send_command_to_px4_def(self, path, args):
         prosces = subprocess.Popen([path] + args,  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -300,7 +300,6 @@ class Tester:
         return True
 
     def reboot_px4(self):
-
         res = False
         if (self.connection == "serial"):
             res = self.reboot_using_serial()
