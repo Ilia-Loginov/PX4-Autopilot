@@ -313,7 +313,7 @@ class Tester:
         else:
             print("Rebooting failed")
 
-        time.sleep(10)
+        time.sleep(15)
 
     def check_dev(self):
         device_path = "/dev/ttyACM0"

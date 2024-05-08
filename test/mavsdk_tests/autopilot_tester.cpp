@@ -84,7 +84,33 @@ void AutopilotTester::wait_until_ready()
 
 	// Wiat until the system is healthy
 	CHECK(poll_condition_with_timeout(
-	[this]() { return _telemetry->health_all_ok(); }, std::chrono::seconds(30)));
+	[this]() {
+		//_health.is_gyrometer_calibration_ok && _health.is_accelerometer_calibration_ok &&
+        	//_health.is_magnetometer_calibration_ok && _health.is_local_position_ok &&
+        	//_health.is_global_position_ok && _health.is_home_position_ok
+		if (!_telemetry->health_all_ok()) {
+			static Telemetry::Health last_health{};
+			const bool equal = last_health.is_accelerometer_calibration_ok  == _telemetry->health().is_accelerometer_calibration_ok &&
+			                   last_health.is_gyrometer_calibration_ok      == _telemetry->health().is_gyrometer_calibration_ok &&
+			                   last_health.is_accelerometer_calibration_ok  == _telemetry->health().is_accelerometer_calibration_ok &&
+			                   last_health.is_magnetometer_calibration_ok   == _telemetry->health().is_magnetometer_calibration_ok &&
+			                   last_health.is_local_position_ok             == _telemetry->health().is_local_position_ok &&
+			                   last_health.is_global_position_ok            == _telemetry->health().is_global_position_ok &&
+			                   last_health.is_home_position_ok              == _telemetry->health().is_home_position_ok;
+			if (!equal)
+			{
+				last_health =  _telemetry->health();
+				std::cout << "\033[31m" <<"Health check was failed " << "\033[0m" << std::endl
+				          << "is_gyrometer_calibration_ok "     << _telemetry->health().is_gyrometer_calibration_ok << std::endl
+					  << "is_accelerometer_calibration_ok " << _telemetry->health().is_accelerometer_calibration_ok << std::endl
+					  << "is_magnetometer_calibration_ok "  << _telemetry->health().is_magnetometer_calibration_ok << std::endl
+					  << "is_local_position_ok "            << _telemetry->health().is_local_position_ok << std::endl
+					  << "is_global_position_ok "           << _telemetry->health().is_global_position_ok << std::endl
+					  << "is_home_position_ok "             << _telemetry->health().is_home_position_ok << std::endl
+					  << "---------------------------------"<<  std::endl;
+			}
+		}
+		return _telemetry->health_all_ok(); }, std::chrono::seconds(30)));
 
 	// Note: There is a known bug in MAVSDK (https://github.com/mavlink/MAVSDK/issues/1852),
 	// where `health_all_ok()` returning true doesn't actually mean vehicle is ready to accept
