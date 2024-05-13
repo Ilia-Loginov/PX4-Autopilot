@@ -3,7 +3,10 @@ find_package(gazebo
 	QUIET
 )
 
+
+message("A")
 if(gazebo_FOUND)
+	message("B")
 
 	message(STATUS "Found gazebo-classic ${gazebo_VERSION}, including sitl_gazebo-classic simulator and gazebo-classic targets")
 
