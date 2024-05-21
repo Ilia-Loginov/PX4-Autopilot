@@ -61,7 +61,7 @@ def main() -> NoReturn:
     with open(args.config_file) as json_file:
         config = json.load(json_file)
 
-    if config["mode"] != "sitl" and args.gui:
+    if config["mode"] != "sitl" and args.gui and config['simulator'] == 'gazebo':
         print("--gui is not compatible with the mode '{}'"
               .format(config["mode"]))
         sys.exit(1)
@@ -401,97 +401,95 @@ class Tester:
                       case: str) -> None:
         self.active_runners = []
 
-        if self.config['mode'] == 'sitl':
-            if self.config['simulator'] == 'gazebo':
-                # Use RegEx to extract worldname.world from case name
-                match = re.search(r'\((.*?\.world)\)', case)
-                if match:
-                    world_name = match.group(1)
-                else:
-                    world_name = 'empty.world'
+        if self.config['simulator'] == 'gazebo' and self.config['mode'] == 'sitl':
+            # Use RegEx to extract worldname.world from case name
+            match = re.search(r'\((.*?\.world)\)', case)
+            if match:
+                world_name = match.group(1)
+            else:
+                world_name = 'empty.world'
 
-                gzserver_runner = ph.GzserverRunner(
-                    os.getcwd(),
-                    log_dir,
-                    test['vehicle'],
-                    case,
-                    self.get_max_speed_factor(test),
-                    self.verbose,
-                    self.build_dir,
-                    world_name)
-                self.active_runners.append(gzserver_runner)
+            gzserver_runner = ph.GzserverRunner(
+                os.getcwd(),
+                log_dir,
+                test['vehicle'],
+                case,
+                self.get_max_speed_factor(test),
+                self.verbose,
+                self.build_dir,
+                world_name)
+            self.active_runners.append(gzserver_runner)
 
-                gzmodelspawn_runner = ph.GzmodelspawnRunner(
-                    os.getcwd(),
-                    log_dir,
-                    test['vehicle'],
-                    case,
-                    self.verbose,
-                    self.build_dir)
-                self.active_runners.append(gzmodelspawn_runner)
+            gzmodelspawn_runner = ph.GzmodelspawnRunner(
+                os.getcwd(),
+                log_dir,
+                test['vehicle'],
+                case,
+                self.verbose,
+                self.build_dir)
+            self.active_runners.append(gzmodelspawn_runner)
 
-                if self.gui:
-                    gzclient_runner = ph.GzclientRunner(
-                        os.getcwd(),
-                        log_dir,
-                        test['model'],
-                        case,
-                        self.verbose)
-                    self.active_runners.append(gzclient_runner)
-
-                # We must start the PX4 instance at the end, as starting
-                # it in the beginning, then connecting Gazebo server freaks
-                # out the PX4 (it needs to have data coming in when started),
-                # and can lead to EKF to freak out, or the instance itself
-                # to die unexpectedly.
-                px4_runner = ph.Px4Runner(
+            if self.gui:
+                gzclient_runner = ph.GzclientRunner(
                     os.getcwd(),
                     log_dir,
                     test['model'],
                     case,
-                    self.get_max_speed_factor(test),
-                    self.debugger,
-                    self.verbose,
-                    self.build_dir)
-                for env_key in test.get('env', []):
-                    px4_runner.env[env_key] = str(test['env'][env_key])
-                self.active_runners.append(px4_runner)
+                    self.verbose)
+                self.active_runners.append(gzclient_runner)
 
-            elif self.config['simulator'] == 'gz_sim':
+            # We must start the PX4 instance at the end, as starting
+            # it in the beginning, then connecting Gazebo server freaks
+            # out the PX4 (it needs to have data coming in when started),
+            # and can lead to EKF to freak out, or the instance itself
+            # to die unexpectedly.
+            px4_runner = ph.Px4Runner(
+                os.getcwd(),
+                log_dir,
+                test['model'],
+                case,
+                self.get_max_speed_factor(test),
+                self.debugger,
+                self.verbose,
+                self.build_dir)
+            for env_key in test.get('env', []):
+                px4_runner.env[env_key] = str(test['env'][env_key])
+            self.active_runners.append(px4_runner)
 
-                 # Use RegEx to extract worldname.world from case name
-                match = re.search(r'\((.*?\.world)\)', case)
-                if match:
-                    world_name = match.group(1)
-                else:
-                    world_name = 'default.sdf'
+        elif self.config['simulator'] == 'gz_sim':
 
-                gzserver_runner = ph.GzHarmonicServer(
+            if self.config['mode'] == 'hitl':
+                world_name = 'default_hitl.sdf'
+            else :
+                world_name = 'default.sdf'
+
+            gzserver_runner = ph.GzHarmonicServer(
+                os.getcwd(),
+                log_dir,
+                test['vehicle'],
+                case,
+                self.get_max_speed_factor(test),
+                self.verbose,
+                self.build_dir,
+                world_name)
+            self.active_runners.append(gzserver_runner)
+
+            if self.gui:
+                gzclient_runner = ph.GzHarmonicClientRunner(
                     os.getcwd(),
                     log_dir,
-                    test['vehicle'],
+                    test['model'],
                     case,
-                    self.get_max_speed_factor(test),
-                    self.verbose,
-                    self.build_dir,
-                    world_name)
-                self.active_runners.append(gzserver_runner)
-
-                if self.gui:
-                    gzclient_runner = ph.GzHarmonicClientRunner(
-                        os.getcwd(),
-                        log_dir,
-                        test['model'],
-                        case,
-                        self.verbose)
-                    self.active_runners.append(gzclient_runner)
+                    self.verbose)
+                self.active_runners.append(gzclient_runner)
 
 
-                # We must start the PX4 instance at the end, as starting
-                # it in the beginning, then connecting Gazebo server freaks
-                # out the PX4 (it needs to have data coming in when started),
-                # and can lead to EKF to freak out, or the instance itself
-                # to die unexpectedly.
+            # We must start the PX4 instance at the end, as starting
+            # it in the beginning, then connecting Gazebo server freaks
+            # out the PX4 (it needs to have data coming in when started),
+            # and can lead to EKF to freak out, or the instance itself
+            # to die unexpectedly.
+            if self.config['mode'] == 'sitl':
                 px4_runner = ph.Px4Runner(
                     os.getcwd(),
                     log_dir,

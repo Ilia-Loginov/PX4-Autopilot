@@ -18,6 +18,7 @@ PX4_GAZEBO_WORLDS = PX4_SITL_GAZEBO_PATH + "/worlds"
 
 PX4_GZ_SIM_MODELS = PX4_SITL_GZ_SIM_PATH + "/models"
 PX4_GZ_SIM_WORLDS = PX4_SITL_GZ_SIM_PATH + "/worlds"
+PX4_GZ_SIM_PLUGIN = "build_gz-sim_plugins"
 
 class Runner:
     def __init__(self,
@@ -361,6 +362,8 @@ class GzHarmonicServer(Runner):
             os.path.join(workspace_dir, PX4_GZ_SIM_WORLDS)
 
         self.env["GZ_SIM_RESOURCE_PATH"] = self.env["PX4_GZ_WORLDS"] + ":" + self.env["PX4_GZ_MODELS"]
+        self.env["GZ_SIM_SYSTEM_PLUGIN_PATH"] =  \
+            os.path.join(workspace_dir, build_dir, PX4_GZ_SIM_PLUGIN)
 
         if os.path.isfile(os.path.join(workspace_dir,
                                        PX4_GZ_SIM_WORLDS,
