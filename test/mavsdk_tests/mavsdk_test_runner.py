@@ -458,9 +458,9 @@ class Tester:
 
         elif self.config['simulator'] == 'gz_sim':
 
-            if self.config['mode'] == 'hitl':
-                world_name = 'default_hitl.sdf'
-            else :
+            if "word" in test:
+                world_name = test['word']
+            else:
                 world_name = 'default.sdf'
 
             gzserver_runner = ph.GzHarmonicServer(

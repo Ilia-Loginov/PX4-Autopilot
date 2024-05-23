@@ -1,5 +1,3 @@
-
-
 set(GAZEBO_VERSION 8)
 
 find_package(gz-sim8 QUIET)

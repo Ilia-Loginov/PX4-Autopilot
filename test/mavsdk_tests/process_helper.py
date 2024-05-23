@@ -52,6 +52,10 @@ class Runner:
         if self.verbose:
             print("Running: {}".format(" ".join([self.cmd] + self.args)))
 
+        if self.name == "mavsdk_tests":
+            if self.env["HIL_MODE"] == "hitl":
+                print(self.env["HIL_MODE"])
+                time.sleep(10)
         atexit.register(self.stop)
 
         if self.verbose:
@@ -360,8 +364,8 @@ class GzHarmonicServer(Runner):
             os.path.join(workspace_dir, PX4_GZ_SIM_MODELS)
         self.env["PX4_GZ_WORLDS"] = \
             os.path.join(workspace_dir, PX4_GZ_SIM_WORLDS)
-
-        self.env["GZ_SIM_RESOURCE_PATH"] = self.env["PX4_GZ_WORLDS"] + ":" + self.env["PX4_GZ_MODELS"]
+        self.env["GZ_SIM_RESOURCE_PATH"] =  \
+            self.env["PX4_GZ_WORLDS"] + ":" + self.env["PX4_GZ_MODELS"]
         self.env["GZ_SIM_SYSTEM_PLUGIN_PATH"] =  \
             os.path.join(workspace_dir, build_dir, PX4_GZ_SIM_PLUGIN)
 
@@ -400,11 +404,17 @@ class TestRunner(Runner):
                  mavlink_connection: str,
                  speed_factor: float,
                  verbose: bool,
-                 build_dir: str):
+                 build_dir: str,
+                 hitl_mode: bool = False):
         super().__init__(log_dir, model, case, verbose)
         self.name = "mavsdk_tests"
         self.cwd = workspace_dir
         self.cmd = "nice"
+        if (hitl_mode):
+            self.env["HIL_MODE"] = "hitl"
+        else:
+            self.env["HIL_MODE"] = "sitl"
+
         self.args = ["-5",
                      os.path.join(
                          workspace_dir,
