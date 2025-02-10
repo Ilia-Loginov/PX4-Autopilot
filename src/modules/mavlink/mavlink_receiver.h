@@ -111,6 +111,7 @@
 #include <uORB/topics/vehicle_trajectory_bezier.h>
 #include <uORB/topics/vehicle_trajectory_waypoint.h>
 #include <uORB/topics/velocity_limits.h>
+#include <uORB/topics/vehicle_angular_velocity.h>
 
 #if !defined(CONSTRAINED_FLASH)
 # include <uORB/topics/debug_array.h>
@@ -292,7 +293,7 @@ private:
 	uint16_t _mavlink_status_last_packet_rx_drop_count{0};
 
 	// ORB publications
-	uORB::Publication<airspeed_s>				_airspeed_pub{ORB_ID(airspeed)};
+	//uORB::Publication<airspeed_s>				_airspeed_pub{ORB_ID(airspeed)};
 	uORB::Publication<battery_status_s>			_battery_pub{ORB_ID(battery_status)};
 	uORB::Publication<camera_status_s>			_camera_status_pub{ORB_ID(camera_status)};
 	uORB::Publication<cellular_status_s>			_cellular_status_pub{ORB_ID(cellular_status)};
@@ -312,7 +313,12 @@ private:
 	uORB::Publication<onboard_computer_status_s>		_onboard_computer_status_pub{ORB_ID(onboard_computer_status)};
 	uORB::Publication<velocity_limits_s>			_velocity_limits_pub{ORB_ID(velocity_limits)};
 	uORB::Publication<generator_status_s>			_generator_status_pub{ORB_ID(generator_status)};
-	uORB::Publication<vehicle_attitude_s>			_attitude_pub{ORB_ID(vehicle_attitude)};
+
+	uORB::Publication<vehicle_angular_velocity_s>		_angular_velocity_groundtruth_pub{ORB_ID(vehicle_angular_velocity_groundtruth)};
+	uORB::Publication<vehicle_attitude_s>			_attitude_groundtruth_pub{ORB_ID(vehicle_attitude_groundtruth)};
+	uORB::Publication<vehicle_global_position_s>		_gpos_groundtruth_pub{ORB_ID(vehicle_global_position_groundtruth)};
+	uORB::Publication<vehicle_local_position_s>		_lpos_groundtruth_pub{ORB_ID(vehicle_local_position_groundtruth)};
+
 	uORB::Publication<vehicle_attitude_setpoint_s>		_att_sp_pub{ORB_ID(vehicle_attitude_setpoint)};
 	uORB::Publication<vehicle_attitude_setpoint_s>		_mc_virtual_att_sp_pub{ORB_ID(mc_virtual_attitude_setpoint)};
 	uORB::Publication<vehicle_attitude_setpoint_s>		_fw_virtual_att_sp_pub{ORB_ID(fw_virtual_attitude_setpoint)};
@@ -371,10 +377,14 @@ private:
 	PX4Gyroscope *_px4_gyro{nullptr};
 	PX4Magnetometer *_px4_mag{nullptr};
 
-	float _global_local_alt0{NAN};
-	MapProjection _global_local_proj_ref{};
+	hrt_abstime _last_utm_global_pos_com{0};
 
-	hrt_abstime			_last_utm_global_pos_com{0};
+	hrt_abstime _hil_timestamp_prev{};
+	matrix::Vector3d _hil_position_prev{};
+	matrix::Vector3d _hil_velocity_prev{};
+	matrix::Vector3f _hil_euler_prev{};
+	MapProjection _hil_pos_ref{};
+	double _hil_alt_ref{};
 
 	// Allocated if needed.
 	TunePublisher *_tune_publisher{nullptr};

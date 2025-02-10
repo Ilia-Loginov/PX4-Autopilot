@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# HITL testing parameters.
+#
+
+param set-default SYS_HITL 1
+param set-default UAVCAN_ENABLE 0
+param set-default SYS_FAILURE_EN 1
+
+# disable some checks to allow to fly
+# - without real battery
+param set-default CBRK_SUPPLY_CHK 894281
+# - without safety switch
+param set-default COM_PREARM_MODE 0
+param set-default CBRK_IO_SAFETY 22027
+
+
+# Disable RC loss failsafe check
+param set-default COM_RC_LOSS_T 180
+param set-default NAV_RCL_ACT 1
+
+# Disable RC input requirement
+param set-default COM_RC_IN_MODE 1
+
+echo DEVICE=eth0 > /fs/microsd/net.cfg
+echo BOOTPROTO=static >> /fs/microsd/net.cfg
+echo IPADDR=192.168.202.1 >> /fs/microsd/net.cfg
+echo NETMASK=255.255.255.0 >>/fs/microsd/net.cfg
+
+sensor_gps_sim start
+sensor_mag_sim start
+sensor_baro_sim start
+sensor_airspeed_sim start
