@@ -50,6 +50,7 @@
 using namespace time_literals;
 
 static constexpr float TEMPERATURE_MSL = 288.15; // temperature at MSL [K] (15 [C])
+static constexpr float TEMPERATURE_ZERO_C = 273.15; // temperature at zero degree Celcius [K] (0 [C])
 static constexpr float PRESSURE_MSL = 101325.0; // pressure at MSL [Pa]
 static constexpr float LAPSE_RATE = 0.0065; // reduction in temperature with altitude for troposphere [K/m]
 static constexpr float AIR_DENSITY_MSL = 1.225; // air density at MSL [kg/m^3]
@@ -81,7 +82,7 @@ private:
 	matrix::Vector3f noiseGauss3f(float stdx, float stdy, float stdz) { return matrix::Vector3f(generate_wgn() * stdx, generate_wgn() * stdy, generate_wgn() * stdz); }
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
-	uORB::Subscription _vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
+	uORB::Subscription _vehicle_attitude_sub{ORB_ID(vehicle_attitude_groundtruth)};
 	uORB::Subscription _vehicle_global_position_sub{ORB_ID(vehicle_global_position_groundtruth)};
 	uORB::Subscription _vehicle_local_position_sub{ORB_ID(vehicle_local_position_groundtruth)};
 

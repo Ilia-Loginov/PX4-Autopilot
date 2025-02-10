@@ -135,6 +135,8 @@ MavlinkReceiver::acknowledge(uint8_t sysid, uint8_t compid, uint16_t command, ui
 void
 MavlinkReceiver::handle_message(mavlink_message_t *msg)
 {
+	//if (0 != msg->msgid)
+	//	PX4_WARN("msgid %lu", msg->msgid);
 	switch (msg->msgid) {
 	case MAVLINK_MSG_ID_COMMAND_LONG:
 		handle_message_command_long(msg);
@@ -2365,56 +2367,74 @@ MavlinkReceiver::handle_message_hil_gps(mavlink_message_t *msg)
 	mavlink_hil_gps_t hil_gps;
 	mavlink_msg_hil_gps_decode(msg, &hil_gps);
 
-	sensor_gps_s gps{};
+	if (_mavlink->get_hil_enabled()) {
+		if (!_hil_pos_ref.isInitialized()) {
+			_hil_pos_ref.initReference(hil_gps.lat / 1e7, hil_gps.lon / 1e7, hrt_absolute_time());
+			_hil_alt_ref = hil_gps.alt / 1e3f;
 
-	device::Device::DeviceId device_id;
-	device_id.devid_s.bus_type = device::Device::DeviceBusType::DeviceBusType_MAVLINK;
-	device_id.devid_s.bus = _mavlink->get_instance_id();
-	device_id.devid_s.address = msg->sysid;
-	device_id.devid_s.devtype = DRV_GPS_DEVTYPE_SIM;
+		} else {
+			// Publish GPS groundtruth
+			vehicle_global_position_s hil_global_position_groundtruth{};
+			hil_global_position_groundtruth.timestamp_sample = hrt_absolute_time();
+			hil_global_position_groundtruth.timestamp = hrt_absolute_time();
+			hil_global_position_groundtruth.lat = hil_gps.lat / 1e7;
+			hil_global_position_groundtruth.lon = hil_gps.lon / 1e7;
+			hil_global_position_groundtruth.alt = hil_gps.alt / 1e3f;
+			_gpos_groundtruth_pub.publish(hil_global_position_groundtruth);
+		}
 
-	gps.device_id = device_id.devid;
+	} else {
+		sensor_gps_s gps{};
 
-	gps.latitude_deg = hil_gps.lat * 1e-7;
-	gps.longitude_deg = hil_gps.lon * 1e-7;
-	gps.altitude_msl_m = hil_gps.alt * 1e-3;
-	gps.altitude_ellipsoid_m = hil_gps.alt * 1e-3;
+		device::Device::DeviceId device_id;
+		device_id.devid_s.bus_type = device::Device::DeviceBusType::DeviceBusType_MAVLINK;
+		device_id.devid_s.bus = _mavlink->get_instance_id();
+		device_id.devid_s.address = msg->sysid;
+		device_id.devid_s.devtype = DRV_GPS_DEVTYPE_SIM;
 
-	gps.s_variance_m_s = 0.25f;
-	gps.c_variance_rad = 0.5f;
-	gps.fix_type = hil_gps.fix_type;
+		gps.device_id = device_id.devid;
 
-	gps.eph = (float)hil_gps.eph * 1e-2f; // cm -> m
-	gps.epv = (float)hil_gps.epv * 1e-2f; // cm -> m
+		gps.latitude_deg = hil_gps.lat * 1e-7;
+		gps.longitude_deg = hil_gps.lon * 1e-7;
+		gps.altitude_msl_m = hil_gps.alt * 1e-3;
+		gps.altitude_ellipsoid_m = hil_gps.alt * 1e-3;
 
-	gps.hdop = 0; // TODO
-	gps.vdop = 0; // TODO
+		gps.s_variance_m_s = 0.25f;
+		gps.c_variance_rad = 0.5f;
+		gps.fix_type = hil_gps.fix_type;
 
-	gps.noise_per_ms = 0;
-	gps.automatic_gain_control = 0;
-	gps.jamming_indicator = 0;
-	gps.jamming_state = 0;
-	gps.spoofing_state = 0;
+		gps.eph = (float)hil_gps.eph * 1e-2f; // cm -> m
+		gps.epv = (float)hil_gps.epv * 1e-2f; // cm -> m
 
-	gps.vel_m_s = (float)(hil_gps.vel) / 100.0f; // cm/s -> m/s
-	gps.vel_n_m_s = (float)(hil_gps.vn) / 100.0f; // cm/s -> m/s
-	gps.vel_e_m_s = (float)(hil_gps.ve) / 100.0f; // cm/s -> m/s
-	gps.vel_d_m_s = (float)(hil_gps.vd) / 100.0f; // cm/s -> m/s
-	gps.cog_rad = ((hil_gps.cog == 65535) ? (float)NAN : matrix::wrap_2pi(math::radians(
-				hil_gps.cog * 1e-2f))); // cdeg -> rad
-	gps.vel_ned_valid = true;
+		gps.hdop = 0; // TODO
+		gps.vdop = 0; // TODO
 
-	gps.timestamp_time_relative = 0;
-	gps.time_utc_usec = hil_gps.time_usec;
+		gps.noise_per_ms = 0;
+		gps.automatic_gain_control = 0;
+		gps.jamming_indicator = 0;
+		gps.jamming_state = 0;
+		gps.spoofing_state = 0;
 
-	gps.satellites_used = hil_gps.satellites_visible;
+		gps.vel_m_s = (float)(hil_gps.vel) / 100.0f; // cm/s -> m/s
+		gps.vel_n_m_s = (float)(hil_gps.vn) / 100.0f; // cm/s -> m/s
+		gps.vel_e_m_s = (float)(hil_gps.ve) / 100.0f; // cm/s -> m/s
+		gps.vel_d_m_s = (float)(hil_gps.vd) / 100.0f; // cm/s -> m/s
+		gps.cog_rad = ((hil_gps.cog == 65535) ? (float)NAN : matrix::wrap_2pi(math::radians(
+					hil_gps.cog * 1e-2f))); // cdeg -> rad
+		gps.vel_ned_valid = true;
 
-	gps.heading = NAN;
-	gps.heading_offset = NAN;
+		gps.timestamp_time_relative = 0;
+		gps.time_utc_usec = hil_gps.time_usec;
 
-	gps.timestamp = hrt_absolute_time();
+		gps.satellites_used = hil_gps.satellites_visible;
 
-	_sensor_gps_pub.publish(gps);
+		gps.heading = NAN;
+		gps.heading_offset = NAN;
+
+		gps.timestamp = hrt_absolute_time();
+
+		_sensor_gps_pub.publish(gps);
+	}
 }
 
 void
@@ -2537,6 +2557,91 @@ MavlinkReceiver::handle_message_adsb_vehicle(mavlink_message_t *msg)
 }
 
 void
+MavlinkReceiver::handle_message_utm_global_position(mavlink_message_t *msg)
+{
+	mavlink_utm_global_position_t utm_pos;
+	mavlink_msg_utm_global_position_decode(msg, &utm_pos);
+
+	bool is_self_published = false;
+
+
+#ifndef BOARD_HAS_NO_UUID
+	px4_guid_t px4_guid;
+	board_get_px4_guid(px4_guid);
+	is_self_published = sizeof(px4_guid) == sizeof(utm_pos.uas_id)
+			    && memcmp(px4_guid, utm_pos.uas_id, sizeof(px4_guid_t)) == 0;
+#else
+
+	is_self_published = msg->sysid == _mavlink->get_system_id();
+#endif /* BOARD_HAS_NO_UUID */
+
+
+	//Ignore selfpublished UTM messages
+	if (is_self_published) {
+		return;
+	}
+
+	// Convert cm/s to m/s
+	float vx = utm_pos.vx / 100.0f;
+	float vy = utm_pos.vy / 100.0f;
+	float vz = utm_pos.vz / 100.0f;
+
+	transponder_report_s t{};
+	t.timestamp = hrt_absolute_time();
+	mav_array_memcpy(t.uas_id, utm_pos.uas_id, PX4_GUID_BYTE_LENGTH);
+	t.icao_address = msg->sysid;
+	t.lat = utm_pos.lat * 1e-7;
+	t.lon = utm_pos.lon * 1e-7;
+	t.altitude = utm_pos.alt / 1000.0f;
+	t.altitude_type = ADSB_ALTITUDE_TYPE_GEOMETRIC;
+	// UTM_GLOBAL_POSIION uses NED (north, east, down) coordinates for velocity, in cm / s.
+	t.heading = atan2f(vy, vx);
+	t.hor_velocity = sqrtf(vy * vy + vx * vx);
+	t.ver_velocity = -vz;
+	// TODO: Callsign
+	// For now, set it to all 0s. This is a null-terminated string, so not explicitly giving it a null
+	// terminator could cause problems.
+	memset(&t.callsign[0], 0, sizeof(t.callsign));
+	t.emitter_type = ADSB_EMITTER_TYPE_UAV;  // TODO: Is this correct?x2?
+
+	// The Mavlink docs do not specify what to do if tslc (time since last communication) is out of range of
+	// an 8-bit int, or if this is the first communication.
+	// Here, I assume that if this is the first communication, tslc = 0.
+	// If tslc > 255, then tslc = 255.
+	unsigned long time_passed = (t.timestamp - _last_utm_global_pos_com) / 1000000;
+
+	if (_last_utm_global_pos_com == 0) {
+		time_passed = 0;
+
+	} else if (time_passed > UINT8_MAX) {
+		time_passed = UINT8_MAX;
+	}
+
+	t.tslc = (uint8_t) time_passed;
+
+	t.flags = 0;
+
+	if (utm_pos.flags & UTM_DATA_AVAIL_FLAGS_POSITION_AVAILABLE) {
+		t.flags |= transponder_report_s::PX4_ADSB_FLAGS_VALID_COORDS;
+	}
+
+	if (utm_pos.flags & UTM_DATA_AVAIL_FLAGS_ALTITUDE_AVAILABLE) {
+		t.flags |= transponder_report_s::PX4_ADSB_FLAGS_VALID_ALTITUDE;
+	}
+
+	if (utm_pos.flags & UTM_DATA_AVAIL_FLAGS_HORIZONTAL_VELO_AVAILABLE) {
+		t.flags |= transponder_report_s::PX4_ADSB_FLAGS_VALID_HEADING;
+		t.flags |= transponder_report_s::PX4_ADSB_FLAGS_VALID_VELOCITY;
+	}
+
+	// Note: t.flags has deliberately NOT set VALID_CALLSIGN or VALID_SQUAWK, because UTM_GLOBAL_POSITION does not
+	// provide these.
+	_transponder_report_pub.publish(t);
+
+	_last_utm_global_pos_com = t.timestamp;
+}
+
+void
 MavlinkReceiver::handle_message_collision(mavlink_message_t *msg)
 {
 	mavlink_collision_t collision;
@@ -2583,132 +2688,74 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 	mavlink_msg_hil_state_quaternion_decode(msg, &hil_state);
 
 	const uint64_t timestamp_sample = hrt_absolute_time();
+	PX4_WARN("handle_message_hil_state_quaternion");
 
-	/* airspeed */
-	{
-		airspeed_s airspeed{};
-		airspeed.timestamp_sample = timestamp_sample;
-		airspeed.indicated_airspeed_m_s = hil_state.ind_airspeed * 1e-2f;
-		airspeed.true_airspeed_m_s = hil_state.true_airspeed * 1e-2f;
-		airspeed.air_temperature_celsius = 15.f;
-		airspeed.timestamp = hrt_absolute_time();
-		_airspeed_pub.publish(airspeed);
-	}
+	const double dt = math::constrain((timestamp_sample - _hil_timestamp_prev) * 1e-6, 0.001, 0.1);
+	_hil_timestamp_prev = timestamp_sample;
 
-	/* attitude */
-	{
-		vehicle_attitude_s hil_attitude{};
-		hil_attitude.timestamp_sample = timestamp_sample;
-		matrix::Quatf q(hil_state.attitude_quaternion);
-		q.copyTo(hil_attitude.q);
-		hil_attitude.timestamp = hrt_absolute_time();
-		_attitude_pub.publish(hil_attitude);
-	}
+	/* Receive attitude quaternion from gz-sim and publish vehicle attitude
+	 * groundtruth and angular velocity ground truth
+	 */
 
-	/* global position */
-	{
-		vehicle_global_position_s hil_global_pos{};
+	/* Publish attitude ground truth */
+	vehicle_attitude_s hil_attitude_groundtruth{};
+	hil_attitude_groundtruth.timestamp_sample = timestamp_sample;
+	matrix::Quatf q(hil_state.attitude_quaternion);
+	q.copyTo(hil_attitude_groundtruth.q);
+	hil_attitude_groundtruth.timestamp = hrt_absolute_time();
+	_attitude_groundtruth_pub.publish(hil_attitude_groundtruth);
 
-		hil_global_pos.timestamp_sample = timestamp_sample;
-		hil_global_pos.lat = hil_state.lat / ((double)1e7);
-		hil_global_pos.lon = hil_state.lon / ((double)1e7);
-		hil_global_pos.alt = hil_state.alt / 1000.0f;
-		hil_global_pos.eph = 2.f;
-		hil_global_pos.epv = 4.f;
-		hil_global_pos.timestamp = hrt_absolute_time();
-		_global_pos_pub.publish(hil_global_pos);
-	}
+	/* Publish angular velocity ground truth */
+	const matrix::Eulerf euler{q};
+	vehicle_angular_velocity_s hil_angular_velocity_groundtruth{};
+	hil_angular_velocity_groundtruth.timestamp_sample = timestamp_sample;
+	const matrix::Vector3f angular_velocity = (euler - _hil_euler_prev) / dt;
+	_hil_euler_prev = euler;
+	angular_velocity.copyTo(hil_angular_velocity_groundtruth.xyz);
+	hil_angular_velocity_groundtruth.timestamp = hrt_absolute_time();
+	_angular_velocity_groundtruth_pub.publish(hil_angular_velocity_groundtruth);
 
-	/* local position */
-	{
-		const double lat = hil_state.lat * 1e-7;
-		const double lon = hil_state.lon * 1e-7;
+	/* Receive local position (pose info) from gz-sim and publish local position
+	 * global position ground truth. Note that the HIL_STATE_QUATERNION msg type
+	 * does not support local position ENU info, so we have to the LAT, LON, ALT
+	 * fields (mmE3) with east in LAT, north in LON, up in ALT
+	 *[TODO create a new mavlink msg maybe called HIL_POSE_INFO for this]
+	 */
+	vehicle_local_position_s hil_local_position_groundtruth{};
 
-		if (!_global_local_proj_ref.isInitialized() || !PX4_ISFINITE(_global_local_alt0)) {
-			_global_local_proj_ref.initReference(lat, lon);
-			_global_local_alt0 = hil_state.alt / 1000.f;
-		}
+	hil_local_position_groundtruth.timestamp_sample = timestamp_sample;
 
-		float x = 0.f;
-		float y = 0.f;
-		_global_local_proj_ref.project(lat, lon, x, y);
+	/* position ENU -> NED */
+	const matrix::Vector3d position{static_cast<double>(hil_state.lon) / 1e3,
+					static_cast<double>(hil_state.lat) / 1e3,
+					-static_cast<double>(hil_state.alt) / 1e3};
+	const matrix::Vector3d velocity{(position - _hil_position_prev) / dt};
+	const matrix::Vector3d acceleration{(velocity - _hil_velocity_prev) / dt};
 
-		vehicle_local_position_s hil_local_pos{};
-		hil_local_pos.timestamp_sample = timestamp_sample;
-		hil_local_pos.ref_timestamp = _global_local_proj_ref.getProjectionReferenceTimestamp();
-		hil_local_pos.ref_lat = _global_local_proj_ref.getProjectionReferenceLat();
-		hil_local_pos.ref_lon = _global_local_proj_ref.getProjectionReferenceLon();
-		hil_local_pos.ref_alt = _global_local_alt0;
-		hil_local_pos.xy_valid = true;
-		hil_local_pos.z_valid = true;
-		hil_local_pos.v_xy_valid = true;
-		hil_local_pos.v_z_valid = true;
-		hil_local_pos.x = x;
-		hil_local_pos.y = y;
-		hil_local_pos.z = _global_local_alt0 - hil_state.alt / 1000.f;
-		hil_local_pos.vx = hil_state.vx / 100.f;
-		hil_local_pos.vy = hil_state.vy / 100.f;
-		hil_local_pos.vz = hil_state.vz / 100.f;
+	_hil_position_prev = position;
+	_hil_velocity_prev = velocity;
 
-		matrix::Eulerf euler{matrix::Quatf(hil_state.attitude_quaternion)};
-		hil_local_pos.heading = euler.psi();
-		hil_local_pos.heading_good_for_control = PX4_ISFINITE(euler.psi());
-		hil_local_pos.unaided_heading = NAN;
-		hil_local_pos.xy_global = true;
-		hil_local_pos.z_global = true;
-		hil_local_pos.vxy_max = INFINITY;
-		hil_local_pos.vz_max = INFINITY;
-		hil_local_pos.hagl_min = INFINITY;
-		hil_local_pos.hagl_max = INFINITY;
-		hil_local_pos.timestamp = hrt_absolute_time();
-		_local_pos_pub.publish(hil_local_pos);
-	}
+	hil_local_position_groundtruth.ax = acceleration(0);
+	hil_local_position_groundtruth.ay = acceleration(1);
+	hil_local_position_groundtruth.az = acceleration(2);
+	hil_local_position_groundtruth.vx = velocity(0);
+	hil_local_position_groundtruth.vy = velocity(1);
+	hil_local_position_groundtruth.vz = velocity(2);
+	hil_local_position_groundtruth.x = position(0);
+	hil_local_position_groundtruth.y = position(1);
+	hil_local_position_groundtruth.z = position(2);
 
-	/* accelerometer */
-	{
-		if (_px4_accel == nullptr) {
-			// 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
-			_px4_accel = new PX4Accelerometer(1310988);
+	hil_local_position_groundtruth.heading = euler.psi();
 
-			if (_px4_accel == nullptr) {
-				PX4_ERR("PX4Accelerometer alloc failed");
-			}
-		}
+	hil_local_position_groundtruth.ref_lat =
+		_hil_pos_ref.getProjectionReferenceLat(); // Reference point latitude in degrees
+	hil_local_position_groundtruth.ref_lon =
+		_hil_pos_ref.getProjectionReferenceLon(); // Reference point longitude in degrees
+	hil_local_position_groundtruth.ref_alt = _hil_alt_ref; // Reference altitude AMSL in meters
+	hil_local_position_groundtruth.ref_timestamp = _hil_pos_ref.getProjectionReferenceTimestamp();
 
-		if (_px4_accel != nullptr) {
-			// accel in mG
-			_px4_accel->set_scale(CONSTANTS_ONE_G / 1000.0f);
-			_px4_accel->update(timestamp_sample, hil_state.xacc, hil_state.yacc, hil_state.zacc);
-		}
-	}
-
-	/* gyroscope */
-	{
-		if (_px4_gyro == nullptr) {
-			// 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
-			_px4_gyro = new PX4Gyroscope(1310988);
-
-			if (_px4_gyro == nullptr) {
-				PX4_ERR("PX4Gyroscope alloc failed");
-			}
-		}
-
-		if (_px4_gyro != nullptr) {
-			_px4_gyro->update(timestamp_sample, hil_state.rollspeed, hil_state.pitchspeed, hil_state.yawspeed);
-		}
-	}
-
-	/* battery status */
-	{
-		battery_status_s hil_battery_status{};
-		hil_battery_status.voltage_v = 11.1f;
-		hil_battery_status.voltage_filtered_v = 11.1f;
-		hil_battery_status.current_a = 10.0f;
-		hil_battery_status.discharged_mah = -1.0f;
-		hil_battery_status.timestamp = hrt_absolute_time();
-		hil_battery_status.time_remaining_s = NAN;
-		_battery_pub.publish(hil_battery_status);
-	}
+	hil_local_position_groundtruth.timestamp = hrt_absolute_time();
+	_lpos_groundtruth_pub.publish(hil_local_position_groundtruth);
 }
 
 #if !defined(CONSTRAINED_FLASH)
@@ -3074,6 +3121,8 @@ MavlinkReceiver::run()
 	hrt_abstime last_send_update = 0;
 
 	while (!_mavlink->should_exit()) {
+		//if (_mavlink->get_instance_id() == 1)
+		//	PX4_WARN("===%d start", _mavlink->get_instance_id());
 
 		// check for parameter updates
 		if (_parameter_update_sub.updated()) {
@@ -3083,6 +3132,8 @@ MavlinkReceiver::run()
 
 			// update parameters from storage
 			updateParams();
+			if (_mavlink->get_instance_id() == 1)
+				PX4_WARN("===%d update param", _mavlink->get_instance_id());
 		}
 
 		int ret = poll(&fds[0], 1, timeout);
@@ -3103,6 +3154,8 @@ MavlinkReceiver::run()
 				if (fds[0].revents & POLLIN) {
 					nread = recvfrom(_mavlink->get_socket_fd(), buf, sizeof(buf), 0, (struct sockaddr *)&srcaddr, &addrlen);
 				}
+				//if (_mavlink->get_instance_id() == 1)
+				//	PX4_WARN("===%d, nread %d ", _mavlink->get_instance_id(), nread);
 
 				struct sockaddr_in &srcaddr_last = _mavlink->get_client_source_address();
 
@@ -3139,11 +3192,15 @@ MavlinkReceiver::run()
 						/* check if we received version 2 and request a switch. */
 						if (!(_mavlink->get_status()->flags & MAVLINK_STATUS_FLAG_IN_MAVLINK1)) {
 							/* this will only switch to proto version 2 if allowed in settings */
+							//PX4_WARN("=== SET MAVLINK2");
 							_mavlink->set_proto_version(2);
 						}
 
 						/* handle generic messages and commands */
 						handle_message(&msg);
+
+						//if (_mavlink->get_instance_id() == 1)
+						//	PX4_WARN("===%d handle_message", _mavlink->get_instance_id());
 
 						/* handle packet with mission manager */
 						_mission_manager.handle_message(&msg);
@@ -3181,6 +3238,8 @@ MavlinkReceiver::run()
 						}
 					}
 				}
+				//if (_mavlink->get_instance_id() == 1)
+				//	PX4_WARN("===%d end for", _mavlink->get_instance_id());
 
 				/* count received bytes (nread will be -1 on read error) */
 				if (nread > 0) {
@@ -3206,6 +3265,8 @@ MavlinkReceiver::run()
 						_mavlink_status_last_packet_rx_drop_count = _status.packet_rx_drop_count;
 					}
 				}
+				//if (_mavlink->get_instance_id() == 1)
+				//	PX4_WARN("===%d count_rxbytes", _mavlink->get_instance_id());
 
 #if defined(MAVLINK_UDP)
 			}
@@ -3216,30 +3277,48 @@ MavlinkReceiver::run()
 			usleep(10000);
 		}
 
+		//if (_mavlink->get_instance_id() == 1)
+		//	PX4_WARN("===%d time", _mavlink->get_instance_id());
 		const hrt_abstime t = hrt_absolute_time();
 
 		CheckHeartbeats(t);
+		//if (_mavlink->get_instance_id() == 1)
+    		//	PX4_WARN("===%d timeout: %d, diff: %lld", _mavlink->get_instance_id(), timeout * 1000, t - last_send_update);
 
 		if (t - last_send_update > timeout * 1000) {
 			_mission_manager.check_active_mission();
+			//if (_mavlink->get_instance_id() == 1)
+			//	PX4_WARN("===%d check_mission", _mavlink->get_instance_id());
 			_mission_manager.send();
+			//if (_mavlink->get_instance_id() == 1)
+			//	PX4_WARN("===%d send1", _mavlink->get_instance_id());
 
 			if (_mavlink->get_mode() != Mavlink::MAVLINK_MODE::MAVLINK_MODE_IRIDIUM) {
 				_parameters_manager.send();
+			//if (_mavlink->get_instance_id() == 1)
+			//	PX4_WARN("===%d send2", _mavlink->get_instance_id());
 			}
 
 			if (_mavlink->ftp_enabled()) {
 				_mavlink_ftp.send();
+			//if (_mavlink->get_instance_id() == 1)
+			//	PX4_WARN("===%d send3", _mavlink->get_instance_id());
 			}
 
 			_mavlink_log_handler.send();
+			//if (_mavlink->get_instance_id() == 1)
+			//	PX4_WARN("===%d send4", _mavlink->get_instance_id());
 			last_send_update = t;
 		}
+		//if (_mavlink->get_instance_id() == 1)
+		//	PX4_WARN("===%d checkHeatbeats", _mavlink->get_instance_id());
 
 		if (_tune_publisher != nullptr) {
 			_tune_publisher->publish_next_tune(t);
 		}
 	}
+	PX4_WARN("====EXIT===%d ", _mavlink->get_instance_id());
+
 }
 
 bool MavlinkReceiver::component_was_seen(int system_id, int component_id)

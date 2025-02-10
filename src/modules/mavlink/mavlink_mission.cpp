@@ -284,7 +284,11 @@ MavlinkMissionManager::send_mission_current(uint16_t seq)
 	wpc.mission_id = _crc32[MAV_MISSION_TYPE_MISSION];
 	wpc.fence_id = _crc32[MAV_MISSION_TYPE_FENCE];
 	wpc.rally_points_id = _crc32[MAV_MISSION_TYPE_RALLY];
+	if (_mavlink->get_instance_id() == 1)
+			PX4_WARN("===%d 1 mavlink_msg_mission_current_send_struct", _mavlink->get_instance_id());
 	mavlink_msg_mission_current_send_struct(_mavlink->get_channel(), &wpc);
+	if (_mavlink->get_instance_id() == 1)
+			PX4_WARN("===%d 2 mavlink_msg_mission_current_send_struct", _mavlink->get_instance_id());
 
 	PX4_DEBUG("WPM: Send MISSION_CURRENT seq %d", seq);
 }
@@ -541,8 +545,11 @@ MavlinkMissionManager::send()
 		}
 
 	} else if (_slow_rate_limiter.check(hrt_absolute_time())) {
+		if (_mavlink->get_instance_id() == 1)
+			PX4_WARN("===%d 1 send_mission_current", _mavlink->get_instance_id());
 		send_mission_current(_current_seq);
-
+		if (_mavlink->get_instance_id() == 1)
+			PX4_WARN("===%d 2 send_mission_current", _mavlink->get_instance_id());
 		if ((_count[MAV_MISSION_TYPE_MISSION] > 0) && (_current_seq >= 0)) {
 			// send the reached message another 10 times
 			if (_last_reached >= 0 && (_reached_sent_count < 10)) {
