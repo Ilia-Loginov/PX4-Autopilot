@@ -25,7 +25,7 @@ param set-default COM_RC_IN_MODE 1
 echo DEVICE=eth0 > /fs/microsd/net.cfg
 echo BOOTPROTO=static >> /fs/microsd/net.cfg
 echo IPADDR=192.168.202.1 >> /fs/microsd/net.cfg
-echo NETMASK=255.255.255.0 >>/fs/microsd/net.cfg
+echo NETMASK=255.255.255.0 >> /fs/microsd/net.cfg
 
 sensor_gps_sim start
 sensor_mag_sim start

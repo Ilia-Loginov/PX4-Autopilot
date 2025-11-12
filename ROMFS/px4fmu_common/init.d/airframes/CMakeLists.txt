@@ -49,6 +49,7 @@ if(CONFIG_MODULES_SIMULATION_PWM_OUT_SIM)
 		1101_rc_plane_sih.hil
 		1102_tailsitter_duo_sih.hil
 		1401_holybro_x500.hil
+		1402_t_drone_m690b.hil
 	)
 endif()
 
@@ -69,6 +70,7 @@ if(CONFIG_MODULES_MC_RATE_CONTROL)
 		4061_atl_mantis_edu
 		4071_ifo
 		4073_ifo-s
+		4402_t_drone_m690b
 		4500_clover4
 		4601_droneblocks_dexi_5
 		4901_crazyflie21
