@@ -3121,8 +3121,6 @@ MavlinkReceiver::run()
 	hrt_abstime last_send_update = 0;
 
 	while (!_mavlink->should_exit()) {
-		//if (_mavlink->get_instance_id() == 1)
-		//	PX4_WARN("===%d start", _mavlink->get_instance_id());
 
 		// check for parameter updates
 		if (_parameter_update_sub.updated()) {
@@ -3132,8 +3130,6 @@ MavlinkReceiver::run()
 
 			// update parameters from storage
 			updateParams();
-			if (_mavlink->get_instance_id() == 1)
-				PX4_WARN("===%d update param", _mavlink->get_instance_id());
 		}
 
 		int ret = poll(&fds[0], 1, timeout);
@@ -3154,8 +3150,6 @@ MavlinkReceiver::run()
 				if (fds[0].revents & POLLIN) {
 					nread = recvfrom(_mavlink->get_socket_fd(), buf, sizeof(buf), 0, (struct sockaddr *)&srcaddr, &addrlen);
 				}
-				//if (_mavlink->get_instance_id() == 1)
-				//	PX4_WARN("===%d, nread %d ", _mavlink->get_instance_id(), nread);
 
 				struct sockaddr_in &srcaddr_last = _mavlink->get_client_source_address();
 
@@ -3199,9 +3193,6 @@ MavlinkReceiver::run()
 						/* handle generic messages and commands */
 						handle_message(&msg);
 
-						//if (_mavlink->get_instance_id() == 1)
-						//	PX4_WARN("===%d handle_message", _mavlink->get_instance_id());
-
 						/* handle packet with mission manager */
 						_mission_manager.handle_message(&msg);
 
@@ -3238,8 +3229,6 @@ MavlinkReceiver::run()
 						}
 					}
 				}
-				//if (_mavlink->get_instance_id() == 1)
-				//	PX4_WARN("===%d end for", _mavlink->get_instance_id());
 
 				/* count received bytes (nread will be -1 on read error) */
 				if (nread > 0) {
@@ -3265,8 +3254,6 @@ MavlinkReceiver::run()
 						_mavlink_status_last_packet_rx_drop_count = _status.packet_rx_drop_count;
 					}
 				}
-				//if (_mavlink->get_instance_id() == 1)
-				//	PX4_WARN("===%d count_rxbytes", _mavlink->get_instance_id());
 
 #if defined(MAVLINK_UDP)
 			}
@@ -3277,48 +3264,30 @@ MavlinkReceiver::run()
 			usleep(10000);
 		}
 
-		//if (_mavlink->get_instance_id() == 1)
-		//	PX4_WARN("===%d time", _mavlink->get_instance_id());
 		const hrt_abstime t = hrt_absolute_time();
 
 		CheckHeartbeats(t);
-		//if (_mavlink->get_instance_id() == 1)
-    		//	PX4_WARN("===%d timeout: %d, diff: %lld", _mavlink->get_instance_id(), timeout * 1000, t - last_send_update);
 
 		if (t - last_send_update > timeout * 1000) {
 			_mission_manager.check_active_mission();
-			//if (_mavlink->get_instance_id() == 1)
-			//	PX4_WARN("===%d check_mission", _mavlink->get_instance_id());
 			_mission_manager.send();
-			//if (_mavlink->get_instance_id() == 1)
-			//	PX4_WARN("===%d send1", _mavlink->get_instance_id());
 
 			if (_mavlink->get_mode() != Mavlink::MAVLINK_MODE::MAVLINK_MODE_IRIDIUM) {
 				_parameters_manager.send();
-			//if (_mavlink->get_instance_id() == 1)
-			//	PX4_WARN("===%d send2", _mavlink->get_instance_id());
 			}
 
 			if (_mavlink->ftp_enabled()) {
 				_mavlink_ftp.send();
-			//if (_mavlink->get_instance_id() == 1)
-			//	PX4_WARN("===%d send3", _mavlink->get_instance_id());
 			}
 
 			_mavlink_log_handler.send();
-			//if (_mavlink->get_instance_id() == 1)
-			//	PX4_WARN("===%d send4", _mavlink->get_instance_id());
 			last_send_update = t;
 		}
-		//if (_mavlink->get_instance_id() == 1)
-		//	PX4_WARN("===%d checkHeatbeats", _mavlink->get_instance_id());
 
 		if (_tune_publisher != nullptr) {
 			_tune_publisher->publish_next_tune(t);
 		}
 	}
-	//PX4_WARN("====EXIT===%d ", _mavlink->get_instance_id());
-
 }
 
 bool MavlinkReceiver::component_was_seen(int system_id, int component_id)

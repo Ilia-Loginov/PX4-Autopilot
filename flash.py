@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
-
 import os
 import subprocess
-
-
 
 def upload_framware(device_path):
 	print("Start upload firmware")
