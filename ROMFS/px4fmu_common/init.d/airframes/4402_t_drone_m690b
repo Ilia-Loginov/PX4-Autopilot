@@ -112,3 +112,5 @@ param set-default COM_RC_OVERRIDE 0
 # Change current sense shunt resistor value
 param set-default INA226_SHUNT 0.0005
 
+# - without safety switch
+param set-default CBRK_IO_SAFETY 22027

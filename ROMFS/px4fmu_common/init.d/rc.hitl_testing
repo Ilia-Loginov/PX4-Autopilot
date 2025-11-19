@@ -27,6 +27,17 @@ echo BOOTPROTO=static >> /fs/microsd/net.cfg
 echo IPADDR=192.168.202.1 >> /fs/microsd/net.cfg
 echo NETMASK=255.255.255.0 >> /fs/microsd/net.cfg
 
+set REMOTE_IPADDR "192.168.202.254"
+set GAZEBO_LOCAL_PORT "14543"
+set GAZEBO_REMOTE_PORT "14542"
+
+mavlink start -t ${REMOTE_IPADDR} -u 14541 -o 14540 -r 1000000 -x
+mavlink start -r 1000000 -t ${REMOTE_IPADDR} -u ${GAZEBO_LOCAL_PORT} -o ${GAZEBO_REMOTE_PORT} -m custom
+
+unset REMOTE_IPADDR
+unset GAZEBO_LOCAL_PORT
+unset GAZEBO_REMOTE_PORT
+
 sensor_gps_sim start
 sensor_mag_sim start
 sensor_baro_sim start
