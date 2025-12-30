@@ -63,6 +63,7 @@ endif()
 
 add_subdirectory(px4_work_queue)
 add_subdirectory(work_queue)
+add_subdirectory(sensor_logger)
 
 if("${PX4_PLATFORM}" MATCHES "nuttx")
 	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/c_cpp_properties.json.nuttx.in ${PX4_SOURCE_DIR}/.vscode/c_cpp_properties.json @ONLY)

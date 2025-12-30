@@ -50,6 +50,7 @@
 #include <lib/perf/perf_counter.h>
 #include <px4_platform_common/atomic.h>
 #include <px4_platform_common/i2c_spi_buses.h>
+#include <px4_platform_common/sensor_logger/SensorLogger.hpp>
 
 using namespace InvenSense_MPU6500;
 
@@ -152,6 +153,7 @@ private:
 	uint16_t _fifo_empty_interval_us{1250}; // default 1250 us / 800 Hz transfer interval
 	int32_t _fifo_gyro_samples{static_cast<int32_t>(_fifo_empty_interval_us / (1000000 / GYRO_RATE))};
 
+	sensor_logger::SensorLogger _logger;
 	uint8_t _checked_register{0};
 	static constexpr uint8_t size_register_cfg{15};
 	register_config_t _register_cfg[size_register_cfg] {
