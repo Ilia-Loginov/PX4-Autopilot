@@ -45,14 +45,15 @@ MPU6500::MPU6500(const I2CSPIDriverConfig &config) :
 	I2CSPIDriver(config),
 	_drdy_gpio(config.drdy_gpio),
 	_px4_accel(get_device_id(), config.rotation),
-	_px4_gyro(get_device_id(), config.rotation)
+	_px4_gyro(get_device_id(), config.rotation),
+	_logger(sensor_logger::SensorLogger::get_instance())
 {
 	if (config.drdy_gpio != 0) {
 		_drdy_missed_perf = perf_alloc(PC_COUNT, MODULE_NAME": DRDY missed");
 	}
-	_logger.Start(32587);
 
 	ConfigureSampleRate(_px4_gyro.get_max_rate_hz());
+	_logger.Start(sensor_logger::DEFAULT_TCP_PORT);
 }
 
 MPU6500::~MPU6500()
@@ -469,8 +470,7 @@ uint8_t MPU6500::RegisterRead(Register reg)
 	cmd[0] = static_cast<uint8_t>(reg) | DIR_READ;
 	set_frequency(SPI_SPEED); // low speed for regular registers
 	transfer(cmd, cmd, sizeof(cmd));
-	sensor_logger::RegAccessPayload mes{"mpu6500", 0, static_cast<uint8_t>(reg), cmd[1], sensor_logger::RegOp::READ};
-	_logger.WriteMessage(&mes);
+	_logger.WriteMessage("mpu6500", static_cast<uint8_t>(reg), cmd[1], sensor_logger::RegOp::READ);
 	return cmd[1];
 }
 
@@ -478,8 +478,7 @@ void MPU6500::RegisterWrite(Register reg, uint8_t value)
 {
 	uint8_t cmd[2] { (uint8_t)reg, value };
 	set_frequency(SPI_SPEED); // low speed for regular registers
-	sensor_logger::RegAccessPayload mes{"mpu6500", 0, static_cast<uint8_t>(reg), value, sensor_logger::RegOp::WRITE};
-	_logger.WriteMessage(&mes);
+	_logger.WriteMessage("mpu6500", static_cast<uint8_t>(reg), value, sensor_logger::RegOp::WRITE);
 	transfer(cmd, cmd, sizeof(cmd));
 }
 

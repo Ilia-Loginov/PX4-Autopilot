@@ -10,6 +10,9 @@
 #include <fcntl.h>
 
 namespace sensor_logger {
+
+    constexpr static int DEFAULT_TCP_PORT = 32587;
+    constexpr static char DEFAULT_LOG_FILE[] = PX4_STORAGEDIR "/sensor_log.txt";
     enum class RegOp : uint8_t {
         READ  = 0,
         WRITE = 1,
@@ -32,14 +35,23 @@ namespace sensor_logger {
     
     class SensorLogger : public px4::ScheduledWorkItem {
     public:
-        explicit SensorLogger(); 
+        //static singleton
+        [[nodiscard]] static SensorLogger& get_instance() {
+            static SensorLogger instance;
+            return instance;
+        }
+        SensorLogger(const SensorLogger&) = delete;
+        SensorLogger& operator=(const SensorLogger&) = delete;
+
         void Start(const char * fileName);
         void Start(int tcp_port);
         void Stop();
-        virtual ~SensorLogger();
         int WriteMessage(RegAccessPayload * message);
+        int WriteMessage(const char * unit, uint8_t reg, uint8_t value, RegOp op);
     
     private:
+        SensorLogger(); 
+        virtual ~SensorLogger();
         void Run() override;
         void CloseDescriptorIfOpen(int& fd);
         bool _started{};

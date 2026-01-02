@@ -34,7 +34,7 @@ namespace sensor_logger {
 			return;
 		}
 
-		_log_fd = ::open(fileName, O_CREAT |  O_WRONLY | O_TRUNC, PX4_O_MODE_666);
+		_log_fd = ::open(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC, PX4_O_MODE_666);
 		if (_log_fd < 0) {
 			PX4_ERR("Can't open log file %s", fileName);
 		}
@@ -98,6 +98,21 @@ namespace sensor_logger {
 		if (!res)
 		{
 			PX4_ERR("buffer is full. time %llu" , message->timestamp);
+		}
+		pthread_mutex_unlock(&_mutex);
+		return res ? sizeof(RegAccessPayload) : 0;
+	}
+
+	int SensorLogger::WriteMessage(const char* unit, uint8_t reg, uint8_t value, RegOp op) {
+		
+		pthread_mutex_lock(&_mutex);
+		RegAccessPayload message{"", hrt_absolute_time(), reg, value, op};
+		size_t len = strlen(unit);
+		memcpy(message.unit_name, unit, len > sizeof(message.unit_name) ? sizeof(message.unit_name): len);
+		bool res = _ring_buffer.push_back(reinterpret_cast<uint8_t *>(&message), sizeof(RegAccessPayload));
+		if (!res)
+		{
+			PX4_ERR("buffer is full. time %llu" , message.timestamp);
 		}
 		pthread_mutex_unlock(&_mutex);
 		return res ? sizeof(RegAccessPayload) : 0;
