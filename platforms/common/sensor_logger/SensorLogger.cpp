@@ -1,21 +1,18 @@
 
 #include <px4_platform_common/sensor_logger/SensorLogger.hpp>
 
-#include <fcntl.h>      // open(), O_CREAT, O_WRONLY, O_TRUNC
-#include <unistd.h>    // close(), write()
-#include <sys/stat.h>  
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <px4_platform_common/px4_config.h>  // PX4_O_MODE_666
 #include <px4_platform_common/log.h>
 #include <drivers/drv_hrt.h>
-
-
 
 #include <sys/socket.h>
 #include <assert.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
-
+#include <errno.h>
 namespace sensor_logger {
 	using namespace time_literals;
 
@@ -24,7 +21,8 @@ namespace sensor_logger {
 	{
 		ScheduleOnInterval(10_ms);
 		pthread_mutex_init(&_mutex, NULL);
-		_ring_buffer.allocate(sizeof(RegAccessPayload)*50);
+		constexpr size_t MAX_MSG = 50;
+		_ring_buffer.allocate(sizeof(RegAccessPayload)*MAX_MSG);
 	}
 
 	void SensorLogger::Start(const char * fileName) {
@@ -71,6 +69,7 @@ namespace sensor_logger {
 	}
 
 	void SensorLogger::Stop() {
+		pthread_mutex_lock(&_mutex);
 		if (_started) {
 			if (_backend == BackendType::TCP) {
 				CloseDescriptorIfOpen(_client_socket);
@@ -79,36 +78,35 @@ namespace sensor_logger {
 			else if (_backend == BackendType::FILE) {
 				CloseDescriptorIfOpen(_log_fd);
 			}
-			_started = -1;
+			_started = false;
 			PX4_INFO("Logger was stopped");
 		}
+		pthread_mutex_unlock(&_mutex);
 	}
 
 	void SensorLogger::CloseDescriptorIfOpen(int& fd) {
-		if (fd > 0) {
+		if (fd >= 0) {
 			close(fd);
 			fd = -1;
 		}
 	}
 		
-	int SensorLogger::WriteMessage(RegAccessPayload * message) {
-		pthread_mutex_lock(&_mutex);
-		message->timestamp = hrt_absolute_time();
-		bool res = _ring_buffer.push_back(reinterpret_cast<uint8_t *>(message), sizeof(RegAccessPayload));
-		if (!res)
-		{
-			PX4_ERR("buffer is full. time %llu" , message->timestamp);
-		}
-		pthread_mutex_unlock(&_mutex);
-		return res ? sizeof(RegAccessPayload) : 0;
-	}
-
 	int SensorLogger::WriteMessage(const char* unit, uint8_t reg, uint8_t value, RegOp op) {
 		
+		if (!unit) 
+			return 0;
+
 		pthread_mutex_lock(&_mutex);
 		RegAccessPayload message{"", hrt_absolute_time(), reg, value, op};
 		size_t len = strlen(unit);
-		memcpy(message.unit_name, unit, len > sizeof(message.unit_name) ? sizeof(message.unit_name): len);
+		if (len >= sizeof(message.unit_name)) {
+			memcpy(message.unit_name, unit, sizeof(message.unit_name) - 1);
+			message.unit_name[sizeof(message.unit_name)-1] = '\0';
+		}
+		else {
+			memcpy(message.unit_name, unit,len);
+		}
+
 		bool res = _ring_buffer.push_back(reinterpret_cast<uint8_t *>(&message), sizeof(RegAccessPayload));
 		if (!res)
 		{
@@ -142,9 +140,9 @@ namespace sensor_logger {
 			}			
 
 			char message[100] {};
-			int message_len = sprintf(message, "log module %s tms=%llu, reg=%x, value=%x, op=%s\n",
+			int message_len = snprintf(message, sizeof(message),"log module %s tms=%llu, reg=%x, value=%x, op=%s\n",
 				pkt.unit_name, pkt.timestamp, pkt.reg, pkt.value, pkt.op == RegOp::READ ? "read" : "write");
-			if ( message_len== -1) {
+			if ( message_len < 0 || message_len >= (int)sizeof(message)) {
 				PX4_ERR("Fail of generation message for logging");
 				continue;
 			}
@@ -156,9 +154,14 @@ namespace sensor_logger {
 									message_len,
 									MSG_DONTWAIT);
 					if (ret < 0) {
-						PX4_WARN("TCP client disconnected");
-						close(_client_socket);
-						_client_socket = -1;
+						if (errno == EWOULDBLOCK || errno == EAGAIN) {
+							// skip
+						}
+						else {
+							PX4_WARN("TCP client disconnected");
+							close(_client_socket);
+							_client_socket = -1;
+						}
 					}
 				}
 			}
@@ -176,9 +179,9 @@ namespace sensor_logger {
 	}
 
 	SensorLogger::~SensorLogger() {
-		pthread_mutex_destroy(&_mutex);
-		ScheduleClear();
 		Stop();
+		ScheduleClear();
+		pthread_mutex_destroy(&_mutex);
 	}
 
 }

@@ -1,10 +1,9 @@
 //#include <drivers/drv_hrt.h>
+#pragma once
 
-#include <nuttx/mutex.h>
 #include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 
 #include <lib/ringbuffer/Ringbuffer.hpp>
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -46,7 +45,6 @@ namespace sensor_logger {
         void Start(const char * fileName);
         void Start(int tcp_port);
         void Stop();
-        int WriteMessage(RegAccessPayload * message);
         int WriteMessage(const char * unit, uint8_t reg, uint8_t value, RegOp op);
     
     private:
@@ -54,14 +52,13 @@ namespace sensor_logger {
         virtual ~SensorLogger();
         void Run() override;
         void CloseDescriptorIfOpen(int& fd);
-        bool _started{};
-        int _log_fd{};  
+        bool _started = false;
+        int _log_fd{-1};  
         int _tcp_socket{-1};    
         int _client_socket{-1};
 
-        BackendType _backend;
+        BackendType _backend{BackendType::NONE};
         Ringbuffer _ring_buffer {};
         pthread_mutex_t _mutex;
     };
-
 }
