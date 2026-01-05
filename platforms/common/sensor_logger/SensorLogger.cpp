@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <px4_platform_common/px4_config.h>  // PX4_O_MODE_666
+#include <px4_platform_common/module_params.h>
 #include <px4_platform_common/log.h>
 #include <drivers/drv_hrt.h>
 
@@ -19,58 +20,83 @@ namespace sensor_logger {
 	SensorLogger::SensorLogger():
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::hp_default)
 	{
-		ScheduleOnInterval(10_ms);
 		pthread_mutex_init(&_mutex, NULL);
-		constexpr size_t MAX_MSG = 50;
-		_ring_buffer.allocate(sizeof(RegAccessPayload)*MAX_MSG);
+		param_t pf = param_find("SL_MODE");
+		int32_t value = 0;
+		if (pf != PARAM_INVALID && param_get(pf, &value) == PX4_OK) {
+			if (value > static_cast<int32_t>(BackendType::FILE) ||
+			    static_cast<int32_t> (BackendType::OFF) > value) {
+					PX4_ERR("SL_MODE is out of range!");
+				}
+				else {
+					_backend = static_cast<BackendType> (value);
+				}
+		}
+		
+		if (BackendType::OFF == _backend)
+			return;
+		
+		pf = param_find("SL_MAX_MSG");
+		size_t max_msg = 50; 
+		if (pf != PARAM_INVALID && param_get(pf, &value) == PX4_OK) {
+			max_msg = value; 
+		}
+		_ring_buffer.allocate(sizeof(RegAccessPayload)*max_msg);
+
+		if (BackendType::FILE == _backend) {
+			Start(DEFAULT_LOG_FILE);
+		}
+		else if (BackendType::TCP == _backend) {
+			Start(DEFAULT_TCP_PORT);
+		}
+		
+		ScheduleOnInterval(10_ms);
 	}
 
 	void SensorLogger::Start(const char * fileName) {
-		if (_started)
-		{
-			PX4_WARN("Attempt for start file logging. SensorLogger already started");
-			return;
+		pthread_mutex_lock(&_mutex);
+		if (isAllowedForStart()) {
+			_log_fd = ::open(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC, PX4_O_MODE_666);
+			if (_log_fd < 0) {
+				PX4_ERR("Can't open log file %s", fileName);
+			}
+			else {
+				_started.store(true);
+				_backend = BackendType::FILE;
+				PX4_INFO("Logger was started in FILE mode");
+			}
 		}
-
-		_log_fd = ::open(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC, PX4_O_MODE_666);
-		if (_log_fd < 0) {
-			PX4_ERR("Can't open log file %s", fileName);
-		}
-		else {
-			_started = true;
-			_backend = BackendType::FILE;
-			PX4_INFO("Logger was started in FILE mode");
-		}
+		pthread_mutex_unlock(&_mutex);
 	}
 
 	void SensorLogger::Start(int tcp_port) {
-		if (_started) {
-			PX4_ERR("Attempt for start file logging. SensorLogger already started");
-			return;
+		pthread_mutex_lock(&_mutex);
+		if (isAllowedForStart()) {
+			_tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+			
+			int opt = 1;
+			setsockopt(_tcp_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+			
+			sockaddr_in addr{};
+			addr.sin_family = AF_INET;
+			addr.sin_port   = htons(tcp_port);
+			addr.sin_addr.s_addr = htonl(INADDR_ANY);
+			
+			bind(_tcp_socket, (struct sockaddr *)&addr, sizeof(addr));
+			listen(_tcp_socket, 1);
+			
+			// non-blocking
+			fcntl(_tcp_socket, F_SETFL, O_NONBLOCK);
+			_started.store(true);		
+			_backend = BackendType::TCP;
+			PX4_INFO("Logger was started in TCP mode");
 		}
-		_tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
-
-		int opt = 1;
-		setsockopt(_tcp_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-		sockaddr_in addr{};
-		addr.sin_family = AF_INET;
-		addr.sin_port   = htons(tcp_port);
-		addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-		bind(_tcp_socket, (struct sockaddr *)&addr, sizeof(addr));
-		listen(_tcp_socket, 1);
-
-		// non-blocking
-		fcntl(_tcp_socket, F_SETFL, O_NONBLOCK);
-		_started = true;		
-		_backend = BackendType::TCP;
-		PX4_INFO("Logger was started in TCP mode");
+		pthread_mutex_unlock(&_mutex);
 	}
 
 	void SensorLogger::Stop() {
 		pthread_mutex_lock(&_mutex);
-		if (_started) {
+		if (_started.load()) {
 			if (_backend == BackendType::TCP) {
 				CloseDescriptorIfOpen(_client_socket);
 				CloseDescriptorIfOpen(_tcp_socket);
@@ -78,7 +104,7 @@ namespace sensor_logger {
 			else if (_backend == BackendType::FILE) {
 				CloseDescriptorIfOpen(_log_fd);
 			}
-			_started = false;
+			_started.store(false);
 			PX4_INFO("Logger was stopped");
 		}
 		pthread_mutex_unlock(&_mutex);
@@ -90,10 +116,24 @@ namespace sensor_logger {
 			fd = -1;
 		}
 	}
+
+	bool SensorLogger::isAllowedForStart() const {
+		if (BackendType::OFF == _backend) {
+			PX4_WARN("Sensor logger is turned off");
+			return false;
+		}
+
+		if (_started.load())
+		{
+			PX4_WARN("Attempt for start file logging. SensorLogger already started");
+			return false;
+		}
+		return true;
+	}
 		
 	int SensorLogger::WriteMessage(const char* unit, uint8_t reg, uint8_t value, RegOp op) {
 		
-		if (!unit) 
+		if (!unit || !_started.load()) 
 			return 0;
 
 		pthread_mutex_lock(&_mutex);
@@ -108,17 +148,17 @@ namespace sensor_logger {
 		}
 
 		bool res = _ring_buffer.push_back(reinterpret_cast<uint8_t *>(&message), sizeof(RegAccessPayload));
-		if (!res)
-		{
+		if (!res) {
 			PX4_ERR("buffer is full. time %llu" , message.timestamp);
 		}
+		
 		pthread_mutex_unlock(&_mutex);
 		return res ? sizeof(RegAccessPayload) : 0;
 	}
 
 	void SensorLogger::Run(){
 
-		if (! _started)
+		if (! _started.load())
 			return;
 
 		if (_backend == BackendType::TCP && _client_socket < 0) {
@@ -171,7 +211,7 @@ namespace sensor_logger {
 					PX4_WARN("File is not available for writing");
 					::close(_log_fd);
 					_log_fd = -1;
-					_started = false;
+					_started.store(false);
 				}
 
 			}			

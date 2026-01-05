@@ -2,7 +2,7 @@
 #pragma once
 
 #include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
-
+#include <px4_platform_common/atomic.h>
 #include <lib/ringbuffer/Ringbuffer.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,9 +26,10 @@ namespace sensor_logger {
     };
 
     enum class BackendType {
-        NONE,
-        FILE,
-        TCP
+        OFF = -1,
+        ANY = 0,
+        TCP = 1,
+        FILE = 2
     };
 
     
@@ -52,12 +53,13 @@ namespace sensor_logger {
         virtual ~SensorLogger();
         void Run() override;
         void CloseDescriptorIfOpen(int& fd);
-        bool _started = false;
+        bool isAllowedForStart() const;
+        px4::atomic_bool _started {false};
         int _log_fd{-1};  
         int _tcp_socket{-1};    
         int _client_socket{-1};
 
-        BackendType _backend{BackendType::NONE};
+        BackendType _backend{BackendType::ANY};
         Ringbuffer _ring_buffer {};
         pthread_mutex_t _mutex;
     };
